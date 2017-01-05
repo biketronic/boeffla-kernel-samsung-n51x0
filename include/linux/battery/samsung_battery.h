@@ -104,6 +104,15 @@ struct battery_info {
 	int battery_full_soc;
 	int battery_vf_adc;
 
+	/*BIKETRONIC_BATT current addition*/
+	int battery_current_now;
+	int battery_current_avg;
+	/*BIKETRONIC_BATT capacity addition*/
+	int battery_capacity_full;
+	int battery_capacity_now;
+	int battery_capacity_avg;
+	/* BIKETRONIC_BATT END */
+
 	/* temperature */
 	int battery_temper;
 	int battery_temper_adc;
@@ -260,10 +269,14 @@ enum voltage_type {
 	VOLTAGE_TYPE_VFOCV	= 1,
 };
 
+/*BIKETRONIC_BATT: Add MAH for fuelguage_c <-> battery comms for capacity readout */
 enum soc_type {
 	SOC_TYPE_ADJUSTED	= 0,
 	SOC_TYPE_RAW		= 1,
 	SOC_TYPE_FULL		= 2,
+	MAH_TYPE_FULL		= 3,
+	MAH_TYPE_NOW		= 4,
+	MAH_TYPE_AVG		= 5,
 };
 
 /*
@@ -313,11 +326,17 @@ enum status_full_type {
 /* CDMA model spec : max-voltage minus 60mV */
 #define RECHG_DROP_VALUE	60000
 #else
-#define RECHG_DROP_VALUE	50000
+//BIKETRONIC_BATT -- best practice is 4.0 to 4.2V range i.e. 200mV not 50mV
+// Set to 100mV this will reduce available capacity while increasing cycles.
+#define RECHG_DROP_VALUE	100000
 #endif
 
 /* power off condition, low %duV than VOLTAGE_MIN_DESIGN & SOC 0% */
-#define PWROFF_MARGIN		100000
+//BIKETRONIC_BATT REF:/drivers/battery/samsung_battery.c:334,1408
+// BUGFIX - This is not actually used except for a monitoring alert
+// Increase from 0.1V to 0.3V (3.4V - 0.3 = 3.1V min _load_ voltage)
+// This prevents early power off on old batteries
+#define PWROFF_MARGIN		300000
 #define PWROFF_SOC		0
 
 enum {

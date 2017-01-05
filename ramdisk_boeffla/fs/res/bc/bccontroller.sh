@@ -1,6 +1,8 @@
 # Boeffla-Config controller interface
 #
 # Version: n5120 by ZaneZam (no UMS and notification led functionality, 19 CPU freq/voltages, touch to wake support active)
+# BIKETRONIC NOTE COPY FEATURES FROM 4.4 WORKED & GPU source fixed - GPU now works with frequency and voltage.
+# BIKETRONIC NOTE added biketronic governor
 #
 # (C) andip71
 
@@ -33,7 +35,7 @@ RECOVERY_DEVICE="/dev/block/mmcblk0p6"
 # *******************
 
 if [ "lov_gov_profiles" == "$1" ]; then
-	echo "pegasusq - boeffla moderate;pegasusq - boeffla battery saving;pegasusq - boeffla 1 core;pegasusq - boeffla 2 cores;pegasusq - speedmod;zzmoove - optimal;zzmoove - battery;zzmoove - battery plus;zzmoove - battery yank;zzmoove - battery extreme yank;zzmoove - performance;zzmoove - insane;zzmoove - moderate;zzmoove - game;zzmoove - relax;pegasusqplus - balanced;pegasusqplus - battery"
+	echo "pegasusq - boeffla moderate;pegasusq - boeffla battery saving;pegasusq - boeffla 1 core;pegasusq - boeffla 2 cores;pegasusq - speedmod;zzmoove - optimal;zzmoove - battery;zzmoove - battery plus;zzmoove - battery yank;zzmoove - battery extreme yank;zzmoove - performance;zzmoove - insane;zzmoove - moderate;zzmoove - game;zzmoove - relax;pegasusqplus - balanced;pegasusqplus - battery;pegasusq_biketronic - OC limit"
 	exit 0
 fi
 
@@ -42,18 +44,28 @@ if [ "lov_cpu_volt_profiles" == "$1" ]; then
 	exit 0
 fi
 
+# 5x GPU
+#if [ "lov_gpu_freq_profiles" == "$1" ]; then
+#	echo "54 only;160 only;160/266;266/350;54/108/160/266;108/160/266/350;160/266/350/440 (default);266/350/440/533;350/440/533/600;440/533/600/700"
+#	exit 0
+#fi
+
 if [ "lov_gpu_freq_profiles" == "$1" ]; then
-	echo "54 only;160 only;160/266;266/350;54/108/160/266;108/160/266/350;160/266/350/440 (default);266/350/440/533;350/440/533/600;440/533/600/700"
+	echo "54 only;160 only;160/266;266/350;54/108/160/200/266;108/160/200/266/350;160/266/350/440/533 (default);266/350/440/533/600;350/440/533/600/640;440/533/600/640/700"
 	exit 0
 fi
+
 
 if [ "lov_gpu_volt_profiles" == "$1" ]; then
 	echo "No undervolting;undervolt -25mV;undervolt -50mV;undervolt -75mV;undervolt -100mV;undervolt light;undervolt medium;undervolt heavy;overvolt +25mV;overvolt +50mV;overvolt +75mV;overvolt +100mV"
 	exit 0
 fi
 
+#+275? +300 +333? +640 +666?
+# 666 = 111mhz bus
+# 54, 108, 275,300, 600 = slow bus?
 if [ "lov_gpu_freq" == "$1" ]; then
-	echo "54;108;160;266;350;440;533;600;700"
+	echo "54;108;160;266;300;350;440;533;640;700"
 	exit 0
 fi
 
@@ -118,14 +130,16 @@ if [ "conf_presets" == "$1" ]; then
 		echo "pegasusq;standard;"
 		echo "row;row;"
 		echo "1800000;None;"
-		echo "440/533/600/700;overvolt +50mV"
+		# +640
+		echo "440/533/600/640/700;overvolt +50mV"
 	fi
 	if [ "Power" ==  "$2" ]; then
 		# gov, gov prof, sched int, sched ext, cpu max, cpu uv, gpu freq, gpu uv
 		echo "zzmoove;zzmoove - performance;"
 		echo "row;row;"
 		echo "1704000;None;"
-		echo "266/350/440/533;None"
+		# +600
+		echo "266/350/440/533/600;None"
 	fi
 	if [ "Standard" ==  "$2" ]; then
 		# gov, gov prof, sched int, sched ext, cpu max, cpu uv, gpu freq, gpu uv
@@ -154,103 +168,180 @@ fi
 
 if [ "conf_gpu_freq" == "$1" ]; then
 	if [ "54 only" == "$2" ]; then
-		echo "54;54;54;54"
+		echo "54;54;54;54;54"
 	fi
 	if [ "160 only" == "$2" ]; then
-		echo "160;160;160;160"
+		echo "160;160;160;160;160"
 	fi
 	if [ "160/266" == "$2" ]; then
-		echo "160;160;266;266"
+		echo "160;160;160;266;266"
 	fi
 	if [ "266/350" == "$2" ]; then
-		echo "266;266;350;350"
+		echo "266;266;266;350;350"
 	fi
-	if [ "54/108/160/266" == "$2" ]; then
-		echo "54;108;160;266"
+	if [ "54/108/160/200/266" == "$2" ]; then
+		echo "54;108;160;200;266"
 	fi
-	if [ "108/160/266/350" == "$2" ]; then
-		echo "108 160 266 350"
+	if [ "108/160/200/266/350" == "$2" ]; then
+		echo "108;160;200;266;350"
 	fi
-	if [ "160/266/350/440 (default)" == "$2" ]; then
-		echo "160;266;350;440"
+	if [ "160/266/350/440/533 (default)" == "$2" ]; then
+		echo "160;266;350;440;533"
 	fi
-	if [ "266/350/440/533" == "$2" ]; then
-		echo "266;350;440;533"
+	if [ "266/350/440/533/600" == "$2" ]; then
+		echo "266;350;440;533;600"
 	fi
-	if [ "350/440/533/600" == "$2" ]; then
-		echo "350;440;533;600"
+	if [ "350/440/533/600/640" == "$2" ]; then
+		echo "350;440;533;600;640"
 	fi
-	if [ "440/533/600/700" == "$2" ]; then
-		echo "440;533;600;700"
+	if [ "440/533/600/640/700" == "$2" ]; then
+		echo "440;533;600;640;700"
 	fi
 	exit 0
 fi
 
+#if [ "conf_gpu_freq" == "$1" ]; then
+#	if [ "54 only" == "$2" ]; then
+#		echo "54;54;54;54"
+#	fi
+#	if [ "160 only" == "$2" ]; then
+#		echo "160;160;160;160"
+#	fi
+#	if [ "160/266" == "$2" ]; then
+#		echo "160;160;266;266"
+#	fi
+#	if [ "266/350" == "$2" ]; then
+#		echo "266;266;350;350"
+#	fi
+#	if [ "54/108/160/266" == "$2" ]; then
+#		echo "54;108;160;266"
+#	fi
+#	if [ "108/160/266/350" == "$2" ]; then
+#		echo "108;160;266;350"
+##BIKETRONIC NOTE: ^ added missing semicolons (was spaces)
+#	fi
+#	if [ "160/266/350/440 (default)" == "$2" ]; then
+#		echo "160;266;350;440"
+#	fi
+#	if [ "266/350/440/533" == "$2" ]; then
+#		echo "266;350;440;533"
+#	fi
+#	if [ "350/440/533/600" == "$2" ]; then
+#		echo "350;440;533;600"
+#	fi
+#	if [ "440/533/600/700" == "$2" ]; then
+#		echo "440;533;600;700"
+#	fi
+#	exit 0
+#fi
 
 if [ "conf_gpu_volt" == "$1" ]; then
 	if [ "No undervolting" == "$2" ]; then
-		echo "0;0;0;0"
+		echo "0;0;0;0;0"
 	fi
 	if [ "undervolt -25mV" == "$2" ]; then
-		echo "-25000;-25000;-25000;-25000"
+		echo "-25000;-25000;-25000;-25000;-25000"
 	fi
 	if [ "undervolt -50mV" == "$2" ]; then
-		echo "-50000;-50000;-50000;-50000"
+		echo "-50000;-50000;-50000;-50000;-50000"
 	fi
 	if [ "undervolt -75mV" == "$2" ]; then
-		echo "-75000;-75000;-75000;-75000"
+		echo "-75000;-75000;-75000;-75000;-75000"
 	fi
 	if [ "undervolt -100mV" == "$2" ]; then
-		echo "-100000;-100000;-100000;-100000"
+		echo "-100000;-100000;-100000;-100000;-100000"
 	fi
 	if [ "undervolt light" == "$2" ]; then
-		echo "-25000;-25000;-50000;-50000"
+		echo "-25000;-25000;-25000;-50000;-50000"
 	fi
 	if [ "undervolt medium" == "$2" ]; then
-		echo "-50000;-50000;-75000;-75000"
+		echo "-50000;-50000;-50000;-75000;-75000"
 	fi
 	if [ "undervolt heavy" == "$2" ]; then
-		echo "-75000;-75000;-100000;-100000"
+		echo "-75000;-75000;-75000;-100000;-100000"
 	fi
 	if [ "overvolt +25mV" == "$2" ]; then
-		echo "25000;25000;25000;25000"
+		echo "25000;25000;25000;25000;25000"
 	fi
 	if [ "overvolt +50mV" == "$2" ]; then
-		echo "50000;50000;50000;50000"
+		echo "50000;50000;50000;50000;50000"
 	fi
 	if [ "overvolt +75mV" == "$2" ]; then
-		echo "75000;75000;75000;75000"
+		echo "75000;75000;75000;75000;75000"
 	fi
 	if [ "overvolt +100mV" == "$2" ]; then
-		echo "100000;100000;100000;100000"
+		echo "100000;100000;100000;100000;100000"
 	fi
 	exit 0
 fi
 
+
+#if [ "conf_gpu_volt" == "$1" ]; then
+#	if [ "No undervolting" == "$2" ]; then
+#		echo "0;0;0;0"
+#	fi
+#	if [ "undervolt -25mV" == "$2" ]; then
+#		echo "-25000;-25000;-25000;-25000"
+#	fi
+#	if [ "undervolt -50mV" == "$2" ]; then
+#		echo "-50000;-50000;-50000;-50000"
+#	fi
+#	if [ "undervolt -75mV" == "$2" ]; then
+#		echo "-75000;-75000;-75000;-75000"
+#	fi
+#	if [ "undervolt -100mV" == "$2" ]; then
+#		echo "-100000;-100000;-100000;-100000"
+#	fi
+#	if [ "undervolt light" == "$2" ]; then
+#		echo "-25000;-25000;-50000;-50000"
+#	fi
+#	if [ "undervolt medium" == "$2" ]; then
+#		echo "-50000;-50000;-75000;-75000"
+#	fi
+#	if [ "undervolt heavy" == "$2" ]; then
+#		echo "-75000;-75000;-100000;-100000"
+#	fi
+#	if [ "overvolt +25mV" == "$2" ]; then
+#		echo "25000;25000;25000;25000"
+#	fi
+#	if [ "overvolt +50mV" == "$2" ]; then
+#		echo "50000;50000;50000;50000"
+#	fi
+#	if [ "overvolt +75mV" == "$2" ]; then
+#		echo "75000;75000;75000;75000"
+#	fi
+#	if [ "overvolt +100mV" == "$2" ]; then
+#		echo "100000;100000;100000;100000"
+#	fi
+#	exit 0
+#fi
+
+#BIKETRONIC GOV: 2000Mhz support
+# add front value
 if [ "conf_cpu_volt" == "$1" ]; then
 	if [ "No undervolting" == "$2" ]; then
-		echo "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0"
+		echo "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0"
 	fi
 	if [ "undervolt -25mV" == "$2" ]; then
-		echo "-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25"
+		echo "-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25;-25"
 	fi
 	if [ "undervolt -50mV" == "$2" ]; then
-		echo "-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50"
+		echo "-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50;-50"
 	fi
 	if [ "undervolt -75mV" == "$2" ]; then
-		echo "-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75"
+		echo "-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75;-75"
 	fi
 	if [ "undervolt -100mV" == "$2" ]; then
-		echo "-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100"
+		echo "-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100;-100"
 	fi
 	if [ "undervolt light" == "$2" ]; then
-		echo "0;0;0;0;0;0;0;-25;-25;-25;-25;-25;-25;-25;-50;-50;-50;-50;-50"
+		echo "0;0;0;0;0;0;0;0;-25;-25;-25;-25;-25;-25;-25;-50;-50;-50;-50;-50"
 	fi
 	if [ "undervolt medium" == "$2" ]; then
-		echo "-25;-25;-25;-25;-25;-25;-25;-50;-50;-50;-50;-50;-50;-50;-75;-75;-75;-75;-75"
+		echo "-25;-25;-25;-25;-25;-25;-25;-25;-50;-50;-50;-50;-50;-50;-50;-75;-75;-75;-75;-75"
 	fi
 	if [ "undervolt heavy" == "$2" ]; then
-		echo "-50;-50;-50;-50;-50;-50;-50;-75;-75;-75;-75;-75;-75;-75;-100;-100;-100;-100;-100"
+		echo "-50;-50;-50;-50;-50;-50;-50;-50;-75;-75;-75;-75;-75;-75;-75;-100;-100;-100;-100;-100"
 	fi
 	exit 0
 fi
@@ -358,11 +449,14 @@ fi
 
 if [ "param_charge_rates" == "$1" ]; then
 	# AC charge min/max/steps
-	echo "100;1800;25;"
+	# BIKETRONIC BATT: increased to 2100mA from 1800 (kernel already modded)
+	# changed steps from 25 to 100
+	echo "100;2100;100;"
 	# USB charge min/max/steps
-	echo "0;1600;25;"
+	# BIKETRONIC BATT: increased to 2100mA from 1600 (kernel already modded)
+	echo "0;2100;100;"
 	# Wireless charge min/max/steps
-	echo "100;1000;25"
+	echo "100;1000;100"
 	exit 0
 fi
 
@@ -505,25 +599,26 @@ if [ "apply_governor_profile" == "$1" ]; then
 		busybox sync
 	fi
 
+	# slower cpu_down_rate
 	if [ "pegasusq - speedmod" == "$2" ]; then
 		# disable intelli plug for this governor
 		echo "0" > /sys/module/intelli_plug/parameters/intelli_plug_active
-		# cpu2
+		# cpu2 (std 500-200)
 		echo "500000" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_freq_1_1
 		echo "400000" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_freq_2_0
 		echo "100" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_rq_1_1
 		echo "100" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_rq_2_0
-		# cpu3
+		# cpu3 (std 500-200)
 		echo "800000" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_freq_2_1
 		echo "600000" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_freq_3_0
 		echo "200" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_rq_2_1
 		echo "200" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_rq_3_0
-		# cpu4
+		# cpu4 (std 500-200)
 		echo "800000" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_freq_3_1
 		echo "600000" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_freq_4_0
 		echo "300" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_rq_3_1
 		echo "300" > /sys/devices/system/cpu/cpufreq/pegasusq/hotplug_rq_4_0
-
+		# was 20, 10, ....
 		echo "10" > /sys/devices/system/cpu/cpufreq/pegasusq/cpu_down_rate
 		echo "10" > /sys/devices/system/cpu/cpufreq/pegasusq/cpu_up_rate
 		echo "85" > /sys/devices/system/cpu/cpufreq/pegasusq/up_threshold
@@ -835,7 +930,8 @@ if [ "apply_governor_profile" == "$1" ]; then
 		echo "50" >/sys/devices/system/cpu/cpufreq/lulzactiveq/dec_cpu_load
 		echo "40000" >/sys/devices/system/cpu/cpufreq/lulzactiveq/down_sample_time
 		echo "0" >/sys/devices/system/cpu/cpufreq/lulzactiveq/dvfs_debug
-		echo "1920000 1800000 1704000 1600000 1500000 1400000 1300000 1200000 1100000 1000000 900000 800000 700000 600000 500000 400000 300000 200000 100000" >/sys/devices/system/cpu/cpufreq/lulzactiveq/freq_table
+#BIKETRONIC GOV: 2000Mhz support
+		echo "2000000 1920000 1800000 1704000 1600000 1500000 1400000 1300000 1200000 1100000 1000000 900000 800000 700000 600000 500000 400000 300000 200000 100000" >/sys/devices/system/cpu/cpufreq/lulzactiveq/freq_table
 		echo "1400000" >/sys/devices/system/cpu/cpufreq/lulzactiveq/hispeed_freq
 		echo "500000" >/sys/devices/system/cpu/cpufreq/lulzactiveq/hotplug_freq_1_1 
 		echo "200000" >/sys/devices/system/cpu/cpufreq/lulzactiveq/hotplug_freq_2_0 
@@ -867,7 +963,9 @@ if [ "apply_governor_profile" == "$1" ]; then
 
 	if [ "ondemand - standard" == "$2" ]; then
 		# enable intelli plug for this governor
-		echo "1" > /sys/module/intelli_plug/parameters/intelli_plug_active
+
+		#BIKETRONIC BATT - disable intelliplug
+		echo "0" > /sys/module/intelli_plug/parameters/intelli_plug_active
 		echo "3" >/sys/devices/system/cpu/cpufreq/ondemand/down_differential
 		echo "100" >/sys/devices/system/cpu/cpufreq/ondemand/freq_step
 		echo "0" >/sys/devices/system/cpu/cpufreq/ondemand/ignore_nice_load
@@ -884,7 +982,8 @@ if [ "apply_governor_profile" == "$1" ]; then
 
 	if [ "smartassV2 - standard" == "$2" ]; then
 		# enable intelli plug for this governor
-		echo "1" > /sys/module/intelli_plug/parameters/intelli_plug_active
+		#BIKETRONIC BATT - disable intelliplug
+		echo "0" > /sys/module/intelli_plug/parameters/intelli_plug_active
 		echo "800000" > /sys/devices/system/cpu/cpufreq/smartassV2/awake_ideal_freq
 		echo "0" > /sys/devices/system/cpu/cpufreq/smartassV2/debug_mask
 		echo "99000" > /sys/devices/system/cpu/cpufreq/smartassV2/down_rate_us
@@ -927,7 +1026,8 @@ if [ "apply_governor_profile" == "$1" ]; then
 
 	if [ "wheatley - standard" == "$2" ]; then
 		# enable intelli plug for this governor
-		echo "1" > /sys/module/intelli_plug/parameters/intelli_plug_active
+		#BIKETRONIC BATT - disable intelliplug
+		echo "0" > /sys/module/intelli_plug/parameters/intelli_plug_active
 		echo "5" > /sys/devices/system/cpu/cpufreq/wheatley/allowed_misses
 		echo "0" > /sys/devices/system/cpu/cpufreq/wheatley/ignore_nice_load
 		echo "0" > /sys/devices/system/cpu/cpufreq/wheatley/io_is_busy
@@ -944,7 +1044,9 @@ if [ "apply_governor_profile" == "$1" ]; then
 
 	if [ "performance - standard" == "$2" ]; then
 		# enable intelli plug for this governor
-		echo "1" > /sys/module/intelli_plug/parameters/intelli_plug_active
+
+		#BIKETRONIC BATT - disable intelliplug
+		echo "0" > /sys/module/intelli_plug/parameters/intelli_plug_active
 
 		busybox sleep 0.5s
 		busybox sync
@@ -952,7 +1054,24 @@ if [ "apply_governor_profile" == "$1" ]; then
 
 	if [ "userspace - standard" == "$2" ]; then
 		# enable intelli plug for this governor
-		echo "1" > /sys/module/intelli_plug/parameters/intelli_plug_active
+
+		#BIKETRONIC BATT - disable intelliplug
+		echo "0" > /sys/module/intelli_plug/parameters/intelli_plug_active
+
+		busybox sleep 0.5s
+		busybox sync
+	fi
+
+# governor addition
+	if [ "pegasusq_biketronic - OC limit" == "$2" ]; then
+		# enable intelli plug for this governor
+
+		#BIKETRONIC BATT - disable intelliplug
+		echo "0" > /sys/module/intelli_plug/parameters/intelli_plug_active
+#		echo "0" > /sys/devices/system/cpu/cpufreq/wheatley/ignore_nice_load
+#		echo "0" > /sys/devices/system/cpu/cpufreq/wheatley/io_is_busy
+#		echo "0" > /sys/devices/system/cpu/cpufreq/wheatley/powersave_bias
+#		echo "1" > /sys/devices/system/cpu/cpufreq/wheatley/sampling_down_factor
 
 		busybox sleep 0.5s
 		busybox sync
@@ -977,12 +1096,14 @@ if [ "apply_system_tweaks" == "$1" ]; then
 	fi
 
 	if [ "Boeffla tweaks" == "$2" ]; then
+		# more dirty ratio
 		echo "70" > /proc/sys/vm/dirty_background_ratio
 		echo "250" > /proc/sys/vm/dirty_expire_centisecs
 		echo "90" > /proc/sys/vm/dirty_ratio
 		echo "500" > /proc/sys/vm/dirty_writeback_centisecs
 		echo "4096" > /proc/sys/vm/min_free_kbytes
 		echo "60" > /proc/sys/vm/swappiness
+		# less cache pressure, 3 drop cache
 		echo "10" > /proc/sys/vm/vfs_cache_pressure
 		echo "3" > /proc/sys/vm/drop_caches
 		busybox sleep 0.5s
@@ -990,11 +1111,15 @@ if [ "apply_system_tweaks" == "$1" ]; then
 	fi
 
 	if [ "Speedmod tweaks" == "$2" ]; then
+		# NC
 		echo "5" > /proc/sys/vm/dirty_background_ratio
 		echo "200" > /proc/sys/vm/dirty_expire_centisecs
 		echo "20" > /proc/sys/vm/dirty_ratio
+		# slower write back
 		echo "1500" > /proc/sys/vm/dirty_writeback_centisecs
+		# more minfree
 		echo "12288" > /proc/sys/vm/min_free_kbytes
+		# no swap
 		echo "0" > /proc/sys/vm/swappiness
 		echo "100" > /proc/sys/vm/vfs_cache_pressure
 		echo "0" > /proc/sys/vm/drop_caches
@@ -1003,13 +1128,19 @@ if [ "apply_system_tweaks" == "$1" ]; then
 	fi
 
 	if [ "Mattiadj tweaks" == "$2" ]; then
+		#more background less dirty ratio
 		echo "10" > /proc/sys/vm/dirty_background_ratio
 		echo "500" > /proc/sys/vm/dirty_expire_centisecs
 		echo "10" > /proc/sys/vm/dirty_ratio
+		# very fast writeback
 		echo "100" > /proc/sys/vm/dirty_writeback_centisecs
+		# double minfree
 		echo "8192" > /proc/sys/vm/min_free_kbytes
+		# increased slightly
 		echo "70" > /proc/sys/vm/swappiness
+		# greatly increased
 		echo "500" > /proc/sys/vm/vfs_cache_pressure
+		# NC
 		echo "0" > /proc/sys/vm/drop_caches
 		busybox sleep 0.5s
 		busybox sync
@@ -1026,6 +1157,7 @@ if [ "apply_eq_bands" == "$1" ]; then
 	exit 0
 fi
 
+# cache and data mounted with commit = 20 or 0
 if [ "apply_ext4_tweaks" == "$1" ]; then
 	if [ "1" == "$2" ]; then
 		busybox sync

@@ -326,7 +326,7 @@ static void apm_battery_apm_get_power_status(struct apm_power_info *info)
 	} else {
 		if (info->battery_life > 50)
 			info->battery_status = APM_BATTERY_STATUS_HIGH;
-		else if (info->battery_life > 5)
+		else if (info->battery_life > 5) //BIKETRONIC_BATT NOTE: 1 makes no difference
 			info->battery_status = APM_BATTERY_STATUS_LOW;
 		else
 			info->battery_status = APM_BATTERY_STATUS_CRITICAL;

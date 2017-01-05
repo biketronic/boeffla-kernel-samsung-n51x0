@@ -873,27 +873,40 @@ ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf) {
   return len;
 }
 
+/* BIKETRONIC_BUGFIX: */
+/* There are 19 frequency values */
+/* this function only support 15... */
+/* add one ret=... 19 line */
+//BIKETRONIC GOV: 2000Mhz support add to 20
 ssize_t store_UV_mV_table(struct cpufreq_policy *policy,
                                       const char *buf, size_t count) {
 
 	unsigned int ret = -EINVAL;
    int i = 0;
    int j = 0;
-	int u[15];
-   ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", &u[0], &u[1], &u[2], &u[3], &u[4], &u[5], &u[6],
-															&u[7], &u[8], &u[9], &u[10], &u[11], &u[12], &u[13], &u[14]);
-	if(ret != 15) {
-		ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d", &u[0], &u[1], &u[2], &u[3], &u[4], &u[5], &u[6],
-															&u[7], &u[8], &u[9], &u[10], &u[11], &u[12], &u[13]);
-		if(ret != 14) {
-			ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d", &u[0], &u[1], &u[2], &u[3], &u[4], &u[5], &u[6],
-															&u[7], &u[8], &u[9], &u[10], &u[11], &u[12]);
-			if( ret != 12)
-				return -EINVAL;
+	int u[20]; //was 15, add more to 20:
+
+   ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", &u[0], &u[1], &u[2], &u[3], &u[4], &u[5], &u[6],
+															&u[7], &u[8], &u[9], &u[10], &u[11], &u[12], &u[13], &u[14], &u[15], &u[16], &u[17],&u[18],&u[19]);
+	if(ret != 20) {
+
+	   ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", &u[0], &u[1], &u[2], &u[3], &u[4], &u[5], &u[6],
+																&u[7], &u[8], &u[9], &u[10], &u[11], &u[12], &u[13], &u[14]);
+		if(ret != 15) {
+			ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d", &u[0], &u[1], &u[2], &u[3], &u[4], &u[5], &u[6],
+																&u[7], &u[8], &u[9], &u[10], &u[11], &u[12], &u[13]);
+			if(ret != 14) {
+				ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d", &u[0], &u[1], &u[2], &u[3], &u[4], &u[5], &u[6],
+																&u[7], &u[8], &u[9], &u[10], &u[11], &u[12]);
+				if( ret != 12)
+					return -EINVAL;
+			}
 		}
 	}
 
-	for( i = 0; i < 15; i++ )
+	//FIXME: what is the point of ret? 15 is hard coded below!
+	// Perhaps it assumes u[13+] = zero?
+	for( i = 0; i < 20; i++ )
 	{
 		u[i] *= 1000;
 		// round down voltages - thx to AndreiLux
@@ -908,7 +921,7 @@ ssize_t store_UV_mV_table(struct cpufreq_policy *policy,
 		}
 	}
 
-	for( i = 0; i < 15; i++ ) {
+	for( i = 0; i < 20; i++ ) {
 		while(exynos_info->freq_table[i+j].frequency==CPUFREQ_ENTRY_INVALID)
 			j++;
 		exynos_info->volt_table[i+j] = u[i];

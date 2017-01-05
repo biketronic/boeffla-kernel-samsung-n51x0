@@ -82,13 +82,34 @@ enum {
 #define HIGH_AVGCURRENT_FOR_FULLCAP_LEARNING	100
 
 /* power off margin */
-/* soc should be 0.1% unit */
-#define POWER_OFF_SOC_HIGH_MARGIN	2
-#define POWER_OFF_VOLTAGE_HIGH_MARGIN	3500
-#define POWER_OFF_VOLTAGE_LOW_MARGIN	3400
+/* soc should be 0.1% unit (BIKETRONIC_BATT NOTE: it's not, its 1% units) */
+/* BIKETRONIC_BATT - LOW_MARGIN forces SOC to 0.9% sometimes */
+/* HIGH margin holds SOC at POWER_OFF_SOC_HIGH_MARGIN% */
+/* LOW_BATT_COMP forces SOC to 0.9% sometimes */
+/*original values 3.4-3.5V reduced to 3.1-3.2, 3.3V hold minimum 6% SOC */
+/* 3300 HIGH goes to low power with 30 minutes left of reasonable charge */
+/* 3100 LOW goes to low power with no margin at 3.0V BAD! */
+/* 3100 is about 15 minutes extra power vs 3200 at minimum brightness */
+/* at 3300 6%, VOC 3400 to 3100 SOC was 2% at power off */
+/* so below 6% is not accurate but at least functions won't turn off */
+/* unless the battery really is almost flat */
+/* No power between 3.0-3.2V */
+/* below values are minimal 6,3300,3200 was 2,3500,3400 */
+/* NOT USED - SEE prevent_bad_SOC in .c file */
+/* LOW MARGIN not disabled*/
+#define POWER_OFF_SOC_HIGH_MARGIN	6 // was 2, disabled
+#define POWER_OFF_VOLTAGE_HIGH_MARGIN	2800 // was 3500, disabled.
+#define POWER_OFF_VOLTAGE_LOW_MARGIN	2800
+
+//BIKETRONIC_BATT additional DEF
+// Affects all battery data tables which in a convoluted way
+// force SOC to 0.9% on _corrected_ voltages below 3500 low_batt_comp
+// recommend reduction to +0.1V from LOW MARGIN
+#define LOW_BATT_COMP_REDUCTION		(3400 - POWER_OFF_VOLTAGE_LOW_MARGIN)
 
 /* FG recovery handler */
 /* soc should be 1% unit */
+// BIKETRONIC_BATT NOTE: NOT USED
 #define STABLE_LOW_BATTERY_DIFF 3
 #define STABLE_LOW_BATTERY_DIFF_LOWBATT 1
 #define LOW_BATTERY_SOC_REDUCE_UNIT 1

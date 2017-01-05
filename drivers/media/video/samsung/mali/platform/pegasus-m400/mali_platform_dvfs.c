@@ -181,6 +181,7 @@ mali_bool set_mali_dvfs_current_step(unsigned int step)
 	return MALI_TRUE;
 }
 #endif
+
 static mali_bool set_mali_dvfs_status(u32 step,mali_bool boostup)
 {
 	u32 validatedStep=step;

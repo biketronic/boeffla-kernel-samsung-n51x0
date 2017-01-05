@@ -783,22 +783,28 @@ static struct samsung_battery_platform_data samsung_battery_pdata = {
 	.fuelgauge_name = "max17047-fuelgauge",
 
 	/* voltage */
-	.voltage_max = 4300000,
-	.voltage_min = 3400000,
-	.in_curr_limit = 1800,
+	/* BIKETRONIC_BATT */
+	/* These values are not important */
+	/* May be used as absolute values somewhere for sanity checks*/
+	/* so keep slightly larger range than */
+	/* max77693 (charge voltage), max17047 (fuelgauge) */
+	/* SIOP = ? soft charge??? */
+	.voltage_max = 4225000, //4.2V but CV is 4.225 so prevent OverV error?
+	.voltage_min = 2800000, //reduce (maybe used at boot?)
+	.in_curr_limit = 2100, // was 1800 MAX77693 probably limited to 2.1A
 
 	/* charging current */
-	.chg_curr_ta = 1800,
-	.chg_curr_dock = 1800,
-	.chg_curr_siop_lv1 = 1500,
-	.chg_curr_siop_lv2 = 1000,
-	.chg_curr_siop_lv3 = 500,
-	.chg_curr_usb = 475,
-	.chg_curr_cdp = 1000,
-	.chg_curr_wpc = 475,
-	.chg_curr_etc = 475,
+	.chg_curr_ta = 1800, //? used, not really
+	.chg_curr_dock = 1800, //? used, not really
+	.chg_curr_siop_lv1 = 1500, //not used
+	.chg_curr_siop_lv2 = 1000, //not used
+	.chg_curr_siop_lv3 = 500, //not used
+	.chg_curr_usb = 900, //475 ?siop_charge_current
+	.chg_curr_cdp = 1000, //not used
+	.chg_curr_wpc = 475, //not used
+	.chg_curr_etc = 475, //not used
 #if defined(CONFIG_MACH_KONA)
-	.chg_curr_mhl = 900,
+	.chg_curr_mhl = 900, //not used
 #endif
 
 	/* charging param */
@@ -810,7 +816,10 @@ static struct samsung_battery_platform_data samsung_battery_pdata = {
 	.emer_lv2_interval = 10,
 
 	/* recharging voltage */
-	.recharge_voltage = 4257000,
+	//? recalculated anyway to 4.125V for MACH_KONA
+	// This sets the point below which recharging starts
+	// but not used in kernel source for KONA (note 8.0) ??
+	.recharge_voltage = 4157000, 
 
 	/* absolute timeer */
 	.abstimer_charge_duration = 10 * 60 * 60,

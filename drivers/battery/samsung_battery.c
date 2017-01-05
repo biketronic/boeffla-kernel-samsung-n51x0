@@ -331,8 +331,10 @@ static int battery_get_curr_avg(struct battery_info *info)
 	pr_debug("%s\n", __func__);
 
 	/* if 0% && under min voltage && low power charging, power off */
+	/* BIKETRONIC_BATT is this even used???? left alone*/
+	/* Could cause problems with trying to charge when flat and on */
 	if ((info->battery_soc <= PWROFF_SOC) &&
-		(info->battery_vcell < info->pdata->voltage_min) &&
+		(info->battery_vcell < (info->pdata->voltage_min)) &&
 		(info->battery_v_diff < 0) &&
 		((info->input_current < info->pdata->chg_curr_ta) &&
 		(info->input_current < info->pdata->in_curr_limit)) &&
@@ -408,6 +410,11 @@ int battery_get_info(struct battery_info *info,
 }
 
 /* Update all values for battery */
+// BIKETRONIC_BATT NOTE:
+// This is used for sending data to 
+// /sys/devices/platform/samsung-battery/power_supply/battery
+// in file
+// battery-factory.c
 void battery_update_info(struct battery_info *info)
 {
 	union power_supply_propval value;
@@ -502,6 +509,42 @@ void battery_update_info(struct battery_info *info)
 					  &value);
 	info->battery_vfocv = value.intval;
 	info->battery_v_diff = info->battery_vcell - info->battery_vfocv;
+
+
+	/*BIKETRONIC_BATT: Battery current from fuelgauge */
+	/* POWER_SUPPLY_PROP_CURRENT_NOW, POWER_SUPPLY_PROP_CURRENT_AVG, */
+	/* current (mA) from fuelgauge */
+	/* new info->variables in .h */
+	value.intval = POWER_SUPPLY_PROP_CURRENT_NOW; // NOTE: NOT USED
+	info->psy_fuelgauge->get_property(info->psy_fuelgauge,
+					  POWER_SUPPLY_PROP_CURRENT_NOW,
+					  &value);
+	info->battery_current_now = value.intval;
+
+	value.intval = POWER_SUPPLY_PROP_CURRENT_AVG; // NOTE: NOT USED
+	info->psy_fuelgauge->get_property(info->psy_fuelgauge,
+					  POWER_SUPPLY_PROP_CURRENT_AVG,
+					  &value);
+	info->battery_current_avg = value.intval;
+	// Capacity MAH_TYPE_FULL,NOW,AVG
+	value.intval = MAH_TYPE_FULL;
+	info->psy_fuelgauge->get_property(info->psy_fuelgauge,
+					  POWER_SUPPLY_PROP_CAPACITY,
+					  &value);
+	info->battery_capacity_full = value.intval;
+
+	value.intval = MAH_TYPE_NOW;
+	info->psy_fuelgauge->get_property(info->psy_fuelgauge,
+					  POWER_SUPPLY_PROP_CAPACITY,
+					  &value);
+	info->battery_capacity_now = value.intval;
+
+	value.intval = MAH_TYPE_AVG;
+	info->psy_fuelgauge->get_property(info->psy_fuelgauge,
+					  POWER_SUPPLY_PROP_CAPACITY,
+					  &value);
+	info->battery_capacity_avg = value.intval;
+	/* BIKETRONIC_BATT END */	
 
 	temper = battery_get_temper(info);
 	info->battery_t_delta = temper - info->battery_temper;

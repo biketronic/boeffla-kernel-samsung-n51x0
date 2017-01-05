@@ -246,6 +246,7 @@ static sec_bat_adc_region_t cable_adc_value_table[] = {
 	{ 0,    0 },    /* POWER_SUPPLY_TYPE_MISC */
 };
 
+/* BIKETRONIC_BATT note: seems to be not used */
 static sec_charging_current_t charging_current_table[] = {
 	{0,     0,      0,      0},     /* POWER_SUPPLY_TYPE_UNKNOWN */
 	{0,     0,      0,      0},     /* POWER_SUPPLY_TYPE_BATTERY */

@@ -66,6 +66,8 @@ static int battery_type = UNKNOWN_TYPE;
 #define MAX17047_REG_DESIGNCAP_REG	0x18
 #define MAX17047_REG_AVGVCELL		0x19
 #define MAX17047_REG_CONFIG			0x1D
+//BIKETRONIC_BATT add RempCapAV
+#define MAX17047_REG_REMCAP_AV		0x1F
 #define MAX17047_REG_VERSION		0x21
 #define MAX17047_REG_FULLCAP_NOM 	0x23
 #define MAX17047_REG_LEARNCFG		0x28
@@ -76,7 +78,7 @@ static int battery_type = UNKNOWN_TYPE;
 #define MAX17047_REG_TEMPCO			0x39
 #define MAX17047_REG_VFOCV			0xFB
 #define MAX17047_REG_SOC_VF			0xFF
-#define MAX17047_REG_FULLCAP		0x10
+//#define MAX17047_REG_FULLCAP		0x10
 #define MAX17047_REG_FULLCAPNOM		0x23
 #define MAX17047_REG_CURRENT		0x0A
 #define MAX17047_REG_AVG_CURRENT	0x0B
@@ -129,8 +131,8 @@ struct max17047_fuelgauge_data {
 	int low_batt_comp_cnt[LOW_BATT_COMP_RANGE_NUM][LOW_BATT_COMP_LEVEL_NUM];
 
 	/* low battery boot */
-	int low_batt_boot_flag;
-	bool is_low_batt_alarm;
+	int low_batt_boot_flag; //BIKETRONIC_BATT NOTE: Always false?? not set true anywhere?
+	bool is_low_batt_alarm; //BIKETRONIC_BATT NOTE: Always false?? not set true anywhere?
 
 	/* miscellaneous */
 	unsigned long			fullcap_check_interval;
@@ -168,10 +170,45 @@ struct max17047_fuelgauge_data {
 #endif
 };
 
+
+/* BIKETRONIC NOTE: battery internal resistance rev-engineer */
+/* get_low_batt_threshold function */
+/* NB: current is a negative value under discharge */
+/* range = current in mA (assumed mA) */
+/* offset = voltage drop from comp_voltage */
+/* slope = (additon to offset * current / 1000) */
+/* slope = 0.1* current * slope */
+/* EX: for a current of 0.5A, >=-750, <-100 so =-100 row */
+/* NB -750 >=-750, <-100 so -100 row applies */
+/* 3461 + (-500 * 96/1000) = 3461-48 = 3413 */
+/* 3.500-3.413= 87mV */
+/* 87mV / 500mA = 0.174 ohms */
+/*      mA    3500-mVcalc /mA = Ohms */
+/* EX: >1251 = 180/ >1250     = <0.144 */
+/* EX: 1251 = 180/1250        = 0.144 */
+/* EX: 1249 = 49+121=170/1249 = 0.136 */
+/* EX: 751 = 49/750           = 0.0653 */ 
+/* EX: 749 = 39+72  =111/749  = 0.148 */
+/* EX: 500 = 87/500           = 0.174 */
+/* EX: 101 = 39/100           = 0.39 */
+/* EX: <101 = 44/??           =>>0.39 */
+/* EX: SLOPE V=I*SLOPE/1000   = 0.0SLOPE */
+/* So slope will move towards ~0.1 ohm */
+
+/* SUMMARY */
+/* battery resistance from table must be ~0.15 ohms */
+/* real life experience is old 2013 battery 0.63V max drop est 2A or 0.35 ohms */
+/* cheap replacement is ~0.2 ohms when fully charged */
+
+
 static struct battery_data_t fg_battery_data[] = {
 	/* SDI battery data */
+	/* BIKETRONIC_BATT NOTE my battery type is SDI SDI */
+	/* 0X2530 =9520 /2 = 4760mAh */
+	/* actual capacity can't exceed 50-110% of this */
+	/* note: mostly disabled excl. capacity: see prevent_bad_SOC */
 	{
-		.Capacity = 0x2530,
+		.Capacity = 0x2530, 
 		.low_battery_comp_voltage = 3500,
 		.low_battery_table = {
 			/* range, slope, offset */
@@ -672,7 +709,139 @@ static int fg_check_status_reg(struct i2c_client *client)
 	return ret;
 }
 
+/*BIKETRONIC_BATT additional functions */
+/* reads all capacity functions */
+// TYPE: 
+// 0 - FullCAP
+// 1 - RemCapMIX
+// 2 - RemCapAV
+// 3 - RemCapREP
+// 4 - Cycles
+// RETURNS -380, -360, -318????
+// try read_val = fg_read_register(client, MAX17047_REG_REMCAP_MIX);
+// try return read_val.
+static int fg_read_capacity(struct i2c_client *client, int type)
+{
 
+//	u8	data2[2];
+//	u32 temp, multiplier;
+//	s32 result;
+	int	result;
+	int 	multiplier;
+//	int	ret=0;
+	int	read_val;
+
+
+/*
+#define MAX17047_REG_REMCAP_REP	-	0x05
+#define MAX17047_REG_REMCAP_MIX	-	0x0F
+#define MAX17047_REG_FULLCAP	-	0x10
+#define MAX17047_REG_CYCLES	-	0x17
+#define MAX17047_REG_REMCAP_AV	-	0x1F
+#define MAX17047_REG_DESIGNCAP_REG x	0x18
+#define MAX17047_REG_FULLCAP_NOM x	0x23
+#define MAX17047_REG_FULLCAPNOM	x	0x23
+FULL MIX AV REP
+FullCAP Register (10h)
+This register holds the ModelGauge m3 algorithm calculated
+full capacity of the cell under best-case conditions
+(light load, hot). A new full-capacity value is calculated
+after the end of every charge cycle in the application. The
+value is stored in terms of uVh and must be divided by
+the application sense-resistor value to determine capacity
+in mAh
+
+The RemCapMIX (0Fh) register holds the calculated remaining
+capacity of the cell before any empty compensation
+adjustments are performed. The RemCapMIX value is stored in terms
+of uVh and must be divided by the application senseresistor
+value to determine remaining capacity in mAh. 
+
+The RemCapAV (1Fh) register holds the calculated remaining
+capacity of the cell based on all inputs from the
+ModelGauge m3 algorithm including empty compensation.
+The value is stored in terms of uVh and must
+be divided by the application sense-resistor value to
+determine the remaining capacity in mAh.
+
+RemCapREP (05h) is a filtered version of the RemCapAV register
+that prevents large jumps in the reported value caused by
+changes in the application such as abrupt changes in load
+current. The value is stored in terms of uVh and must be
+divided by the application sense-resistor value to determine
+remaining capacity in mAh. During application idle periods
+where the AverageCurrent Register value is less than Q6
+LSbs, RemCapREP does not change. The measured current
+during this period is still accumulated into RemCapMIX
+and is slowly reflected in RemCapREP once cell loading or
+charging occurs
+
+The Cycles register (17h) accumulates total percent change in
+the cell during both charging and discharging. The result
+is stored as a total count of full charge/discharge cycles.
+For example, a full charge/discharge cycle results in
+the Cycles register incrementing by 100%. The Cycles
+register has a full range of 0 to 65535% with a 1% LSb.
+This register is reset to 0% at power-up. 
+*/
+
+	switch(type){
+	case 0:
+//		ret = max17047_i2c_read(client, MAX17047_REG_FULLCAP, data2);		
+		read_val = fg_read_register(client, MAX17047_REG_FULLCAP);
+		// units 2^0 : 5uVh / Rsense (0.5mAh when rsense = 0.01 ohm which it is)
+		// 5 / .01 = 500uVh = 0.5mAh per LSB
+		// so /2 for mAh
+		multiplier = 500;
+		break;
+	case 1:
+//		ret = max17047_i2c_read(client, MAX17047_REG_REMCAP_MIX, data2);
+		read_val = fg_read_register(client, MAX17047_REG_REMCAP_MIX);
+		// same as fullcap
+		multiplier = 500;
+		break;
+	case 2:
+//		ret = max17047_i2c_read(client, MAX17047_REG_REMCAP_AV, data2);
+		read_val = fg_read_register(client, MAX17047_REG_REMCAP_AV);
+		// same as fullcap
+		multiplier = 500;
+		break;
+	case 3:
+//		ret = max17047_i2c_read(client, MAX17047_REG_REMCAP_REP, data2);
+		read_val = fg_read_register(client, MAX17047_REG_REMCAP_REP);
+		// same as fullcap
+		multiplier = 500;
+		break;
+	case 4:
+//		ret = max17047_i2c_read(client, MAX17047_REG_CYCLES, data2);
+		read_val = fg_read_register(client, MAX17047_REG_CYCLES);
+		// units 1%
+		//multiplier = 1/100 cycles
+		multiplier = 10;
+		break;
+	default:
+		read_val=-1;
+		break;
+	}
+	
+	if (read_val < 0) {
+		pr_err("%s: Failed to read CAPACITY\n",
+			__func__);
+		return -1;
+	}
+
+
+	// convert to a real value
+//	temp = ((data2[1]<<8) | data2[0]) & 0xFFFF;
+	
+	result = read_val * multiplier /1000;
+
+	return result;
+}
+
+
+
+/*BIKETRONIC BATT: Battery capacity commented out fixed */
 int get_fuelgauge_value(struct i2c_client *client, int data)
 {
 	int ret = 0;
@@ -716,18 +885,22 @@ int get_fuelgauge_value(struct i2c_client *client, int data)
 		break;
 
 	case FG_FULLCAP:
+		ret = fg_read_capacity(client,0);
 		/*ret = fg_read_fullcap(client);*/
 		break;
 
 	case FG_MIXCAP:
+		ret = fg_read_capacity(client,1);
 		/*ret = fg_read_mixcap(client);*/
 		break;
 
 	case FG_AVCAP:
+		ret = fg_read_capacity(client,2);
 		/*ret = fg_read_avcap(client);*/
 		break;
 
 	case FG_REPCAP:
+		ret = fg_read_capacity(client,3);
 		/*ret = fg_read_repcap(client);*/
 		break;
 
@@ -740,6 +913,15 @@ int get_fuelgauge_value(struct i2c_client *client, int data)
 }
 
 
+//BIKETRONIC_BATT note: what calls this?
+// get_fuelguage_soc - simply looks like a periodic call
+// always compares REG_FULLCAP_NOM and it's previous reading
+// which is read AFTER altering DPACC and DQACC
+// MAX17047_REG_FULLCAP_NOM (new_vffullcap =)
+// MAX17047_REG_DQACC (new vffullcap /4)
+// MAX17047_REG_DPACC (0x3200)
+// DQACC DPACC UNDOCUMENTED. Supposed to be saved and restored.
+//Writes to registers
 void fg_check_vf_fullcap_range(struct i2c_client *client)
 {
 	struct max17047_fuelgauge_data *fg_data =
@@ -781,26 +963,29 @@ void fg_check_vf_fullcap_range(struct i2c_client *client)
 		fg_write_register(client, MAX17047_REG_DPACC, (u16)0x3200);
 	} else {
 	/* compare with previous capacity */
+	//BIKETRONIC_BATT it can increase 20% to eliminate sitting on 5% for ages.
+	// Maximum battery capacity increase is 20%
+	// Maximum battery decrease is 5%. This is because it is very hard to discharge fully. So fake reduced full capacities are a problem.
 		if (new_vffullcap >
-			(fg_data->previous_vffullcap * 110 / 100)) {
+			(fg_data->previous_vffullcap * 120 / 100)) {
 			pr_info("%s: [Case 2] previous_vffullcap = 0x%04x, NewVfFullCap = 0x%04x\n",
 				__func__, fg_data->previous_vffullcap,
 				new_vffullcap);
 
 			new_vffullcap =
-				(fg_data->previous_vffullcap * 110) /
+				(fg_data->previous_vffullcap * 120) /
 				100;
 
 			fg_write_register(client, MAX17047_REG_DQACC,
 				(u16)(new_vffullcap / 4));
 			fg_write_register(client, MAX17047_REG_DPACC, (u16)0x3200);
 		} else if (new_vffullcap <
-			(fg_data->previous_vffullcap * 90 / 100)) {
+			(fg_data->previous_vffullcap * 95 / 100)) {
 			pr_info("%s: [Case 3] previous_vffullcap = 0x%04x, NewVfFullCap = 0x%04x\n",
 				__func__, fg_data->previous_vffullcap, new_vffullcap);
 
 			new_vffullcap =
-				(fg_data->previous_vffullcap * 90) / 100;
+				(fg_data->previous_vffullcap * 95) / 100;
 
 			fg_write_register(client, MAX17047_REG_DQACC,
 				(u16)(new_vffullcap / 4));
@@ -829,6 +1014,8 @@ void fg_check_vf_fullcap_range(struct i2c_client *client)
 
 }
 
+//BIKETRONIC_BATT NOTE: sets FULLCAP to REMCAP_REP
+// I.e. forces fullcap to the current state of charge
 void fg_set_full_charged(struct i2c_client *client)
 {
 	pr_info("[FG_Set_Full] (B) FullCAP(%d), RemCAP(%d)\n",
@@ -979,6 +1166,194 @@ void fg_low_batt_compensation(struct i2c_client *client, u32 level)
 	fg_write_register(client, MAX17047_REG_REMCAP_REP, (u16)temp);
 }
 
+/* BIKETRONIC_BATT PREVENT EARLY POWER OFF */
+/*low batt compensation alternative function */
+/* also drops to 0 if required */
+/* for <3500mV high resistance */
+	// read SOC
+	// read current
+	// read battery voltage
+	// calculate open circuit battery voltage
+	// work out actual SOC
+// THIS FUNCTION CONTROLS EVERYTHING
+// I have seen the device report 7% battery at 2800mV when it was not finished!
+
+int prevent_bad_SOC(struct i2c_client *client, int fg_soc, int fg_vcell, int fg_current, int avg_current, int avg_voltage){
+
+	//struct max17047_fuelgauge_data *fg_data =
+	//			i2c_get_clientdata(client);
+
+	//int soc = 0;
+	int read_val;
+	//int avg_current = 0;
+	//int fg_current=0;
+	int actual_current =0;
+	//int vcell =0;
+
+	// e.g. 200mohms = 0.4V drop under full load 2 amps. (3400mV -> 3000mV)
+	int resistance = 200; //milliohms from table
+	int fraction =0;
+	int actual_voltage = 0; //millivolts
+	int max_SOC = 0; // from table
+ 	int new_SOC = 0; // from table
+	int i;
+	
+
+	// mV to minimum SOC support table corrected for resistance
+	// works quite well.
+	// because of suddent drop to 5%
+	// below 3500mV at 30% SOC despite hours of battery left!?
+	// Open Circuit Volts mV - SOC - MAX SOC - resistance mohms
+	// NB: top and bottom voltages are placeholders
+	// so that % is not forced to a silly value.
+	// top must be max 100%, bottom must be min 0%
+	// NB: resistance is picked by next lowest value
+	// So a cut off resistance value of 1 should be one under the cut off
+	// 
+	// 3600 10,100 - actual was about 2h45 of use from 10% then got to 4h26 flat at 3.1V
+	// should be >10% try 20% minimum.
+	// 3300 6,100 when it hit 5% it lasted maybe 1 minute!!!
+	// so reduce max at 3300 from 100% to 10%.
+	// 3160 0,0 when it hits 0% there is flickering on the back/menu lights. Very dead.
+	// perhaps set 3250 to 0%?
+	// GAMING test: medium brightness (half way), pegasusqplus 1920Mhz overclocked, normal 400Mhz.
+	// Note, with generic 4.2V 4000mAh battery (reported by OS, 2900 to 3662mAh)
+	// 3:40 14%, 3.5-3.6V
+	// 4:47 7%, 3.4-3.5V
+	// 5:10 6-5-0%, 3.3V FLAT in a very short time. Never sees 3250 1,1
+	// So, at ~3550mV, 3.666 (220), 5.1666 (310) = 90 / 310 = 29%
+	// So, at ~3450mV, 287 min = 310-287 = 23 / 310 = 7.4%, about right at 7% indicated!
+	// So, 1% is approx 3 minutes of on time. So 5% should be 15 minutes.
+	// So, put 30% min at 3600mV
+	// move 1% to 3300mV, 6,10% at 3300 to 3350mV
+
+	// PROBLEM: 30% jump on charge again
+
+	static int SOC_support_table_len = 9;
+	int SOC_support_table[9][4]= {  //SOC_support_table_len error
+//			{3900,62,100,200},
+//			{3800,36,100,200},
+//			{3700,30,100,200}, //original test 30% seemed right
+			{3600,30,100,200}, //MAXIMUM SOC is 100%(!)
+
+			{3500,10,100,200}, // no idea what this should be.
+			{3450,7,100,200}, // approx 7% left around 3.4-3.5V  -gaming test
+//			{3400,7,100,200}, // some life at 3400 maybe 3% 10 min
+			{3350,6,10,200}, // increased 6% holder to 3350 as it dies within 5 minutes at 3300.
+//			{3300,6,10,200}, // getting low, basically dead. Max 100% too high.
+			{3300,2,2,200}, // not much at 3300.
+			{3250,1,1,200}, // it goes 250-160very fast 3-5 minutes at 500mA.
+//			{3200,1,1,200}, // -400 = 2800mV full load
+			{3160,0,0,200}, // MAX17047 detects empty at 3.16V by default. Very very dead.
+			{2800,0,0,200}, // 2800mV under load = dead (below this mV value resistance is ignored!)
+//			{2600,0,0,1}, // 2600mV = system off?
+			{0,0,0,1}, // minimum is 0%
+			};
+
+	//soc = get_fuelgauge_value(client, FG_LEVEL);
+
+	// max17047_get_avgvcell
+	//avg_current = fg_read_avg_current(client);
+	//fg_current = fg_read_current(client);
+	//fg_min_current = min(fg_avg_current, fg_current);
+	//vcell = max17047_get_vcell(client);
+	
+	// NOTE current is NEGATIVE when discharging.....
+	// convert to positive value
+	// take the highest current and highest voltage
+	// hopefully this will eliminate jumps to low %
+	actual_current = -avg_current; //-(MIN(avg_current,fg_current));
+	actual_voltage = avg_voltage; //MAX(avg_voltage,fg_vcell);
+
+//	check for not charging!!!
+//      i.e. if discharging at less than 50mA don't do anything...
+// 	increase this massively.
+//	ignore unless discharge is at least 300mA (~idle screen on)
+	if (avg_current > -300 || fg_current > -300 || actual_voltage < 2000)
+		return fg_soc;
+
+
+
+	//Find resistance:
+	for (i=0; i<SOC_support_table_len; i++){
+		if (actual_voltage >= SOC_support_table[i][0]){ // match
+			resistance = SOC_support_table[i][3];
+			break;
+		}
+	}
+
+//	if (actual_current < 0 ) // battery charging
+//		resistance = resistane /2;
+
+	//Vactual = Vmeasured + IxR
+	// mA /1000 x m ohm / 1000 = volts
+	// millivolts:
+	actual_voltage = actual_voltage + 
+			((actual_current * resistance)/1000);
+
+
+
+	// correct for low currents, 50mV boost for cell relaxation time
+	// minimum boost 50mV
+	if (actual_current < 400) actual_voltage += ((50*actual_current)/400);
+
+
+	for (i=0; i<SOC_support_table_len; i++){
+		if (actual_voltage >= SOC_support_table[i][0]){ // match
+			new_SOC = SOC_support_table[i][1];
+			max_SOC = SOC_support_table[i][2];
+			break;
+		}
+
+	}
+	
+	// if SOC is higher or charging do nothing.
+	//if ((fg_soc > new_SOC && new_SOC>0) || actual_voltage < 0)
+	//	return fg_soc;
+
+	// smooth SOC
+	// e.g. (3550 - 3500)*1000 / 3600 - 3500
+	// FRACTION = 50,000 / 100 = 500 (0.5)
+	// soc = 20 + ((30-20)*500/1000) = 20 + (10)*.5 = 20 + 5 = 25
+	if (i <SOC_support_table_len && i>0){
+		fraction = ((actual_voltage - SOC_support_table[i][0])*1000)
+			/ (SOC_support_table[i-1][0] - SOC_support_table[i][0]);
+		new_SOC = new_SOC + ((SOC_support_table[i-1][1]-SOC_support_table[i][1])*fraction/1000);
+
+		max_SOC = max_SOC + ((SOC_support_table[i-1][2]-SOC_support_table[i][2])*fraction/1000);
+
+	}
+
+//	if (fg_soc > new_SOC && new_SOC>0 || actual_voltage < 0)
+//		return fg_soc;
+
+	// check range is within expected range
+	if (fg_soc >= new_SOC && fg_soc <= max_SOC) return fg_soc;
+
+	if (fg_soc > max_SOC) new_SOC = max_SOC;
+
+	// OK so SOC is now below where it should be, and we have a new_SOC
+	// Update it! 
+	
+	pr_info("%s: soc=%d%%, vcell=%d\n", __func__,
+		fg_soc, fg_vcell);	
+	read_val = fg_read_register(client, MAX17047_REG_FULLCAP);
+	/* FullCAP * 0.013 */
+	//BIKETRONIC_BATT change to POWER_OFF_SOC_HIGH_MARGIN + 3
+	// So if the %SOC is less than this, set to it + 0.3
+	fg_write_register(client, MAX17047_REG_REMCAP_REP,
+	(u16)(read_val * ((new_SOC * 10) + 3)/ 1000));
+	msleep(200);
+	fg_soc = max17047_get_soc(client);
+	dev_info(&client->dev, "%s : new soc=%d, vcell=%d\n",
+				__func__, fg_soc, fg_vcell);
+	
+
+return fg_soc;
+}
+
+
+// BIKETRONIC_BATT: DISABLED - See prevent_bad_SOC
 void prevent_early_poweroff(struct i2c_client *client,
 	int vcell, int *fg_soc)
 {
@@ -991,13 +1366,14 @@ void prevent_early_poweroff(struct i2c_client *client,
 		return;
 
 	pr_info("%s: soc=%d%%, vcell=%d\n", __func__,
-		soc, vcell);
-
-	if (vcell > POWER_OFF_VOLTAGE_HIGH_MARGIN) {
+		soc, vcell);	
+	if (vcell > (POWER_OFF_VOLTAGE_HIGH_MARGIN)) {
 		read_val = fg_read_register(client, MAX17047_REG_FULLCAP);
 		/* FullCAP * 0.013 */
+		//BIKETRONIC_BATT change to POWER_OFF_SOC_HIGH_MARGIN + 3
+		// So if the %SOC is less than this, set to it + 0.3
 		fg_write_register(client, MAX17047_REG_REMCAP_REP,
-		(u16)(read_val * 13 / 1000));
+		(u16)(read_val * ((POWER_OFF_SOC_HIGH_MARGIN * 10) + 3)/ 1000));
 		msleep(200);
 		*fg_soc = max17047_get_soc(client);
 		dev_info(&client->dev, "%s : new soc=%d, vcell=%d\n",
@@ -1005,6 +1381,7 @@ void prevent_early_poweroff(struct i2c_client *client,
 	}
 }
 
+// BIKETRONIC_BATT: DISABLED - See prevent_bad_SOC
 int low_batt_compensation(struct i2c_client *client,
 		int fg_soc, int fg_vcell, int fg_current)
 {
@@ -1019,7 +1396,8 @@ int low_batt_compensation(struct i2c_client *client,
 			fg_soc, fg_vcell, fg_current);
 
 	/* Not charging, Under low battery comp voltage */
-	if (fg_vcell <= fg_battery_data[battery_type].low_battery_comp_voltage) {
+	//BIKETRONIC_BATT reduce threshold by LOW_BATT_COMP_REDUCTION (x2)
+	if (fg_vcell <= (fg_battery_data[battery_type].low_battery_comp_voltage - LOW_BATT_COMP_REDUCTION)) {
 		fg_avg_current = fg_read_avg_current(client);
 		fg_min_current = min(fg_avg_current, fg_current);
 
@@ -1027,20 +1405,24 @@ int low_batt_compensation(struct i2c_client *client,
 			sizeof(fg_battery_data[battery_type].low_battery_table) /
 			(sizeof(s16)*TABLE_MAX);
 
+		// BIKETRONIC_BATT note: add to table
 		for (i = 1; i < CURRENT_RANGE_MAX_NUM; i++) {
 			if ((fg_min_current >= fg_battery_data[battery_type].low_battery_table[i-1][RANGE]) &&
 				(fg_min_current < fg_battery_data[battery_type].low_battery_table[i][RANGE])) {
 				if (fg_soc >= 2 && fg_vcell <
-					get_low_batt_threshold(client,
-					i, fg_min_current, 1)) {
+					(get_low_batt_threshold(client,
+					i, fg_min_current, 1) - LOW_BATT_COMP_REDUCTION)) {
 					add_low_batt_comp_cnt(
-						client, i, 1);
+						client, i, 1); //BIKETRONIC_BATT note: level is always 1
 				} else {
 					reset_low_batt_comp_cnt(client);
 				}
 			}
 		}
-
+		
+		// BIKETRONIC_BATT note: Set SOC to new_level (0-3%) depending on table above
+		// Looks like t will only ever set to 0.9% (level is always = 1)
+		// This is because add_cmp_cnt is always at level=1/2 so level is always 2x0 +1 = 1.
 		if (check_low_batt_comp_condition(client, &new_level)) {
 			fg_low_batt_compensation(client, new_level);
 			reset_low_batt_comp_cnt(client);
@@ -1055,7 +1437,9 @@ int low_batt_compensation(struct i2c_client *client,
 	}
 
 	/* Prevent power off over 3500mV */
-	prevent_early_poweroff(client, fg_vcell, &fg_soc);
+	//BIKETRONIC_BATT NOTE - POWER_OFF_HIGH_MARGIN default 3500, reduced elsewhere.
+	//NOTE: low comp may drop SOC then this raises it?
+	prevent_early_poweroff(client, (fg_vcell), &fg_soc);
 
 	return fg_soc;
 }
@@ -1079,12 +1463,17 @@ int fg_adjust_capacity(struct i2c_client *client)
 	return 0;
 }
 
+// BIKETRONIC_BATT NOTE:
+// Never called because flags never set to true?
+// line 1526
 static bool is_booted_in_low_battery(struct i2c_client *client)
 {
 	int fg_vcell = get_fuelgauge_value(client, FG_VOLTAGE);
 	int fg_current = get_fuelgauge_value(client, FG_CURRENT);
 	int threshold = 0;
 
+	// NB current is negative for discharging.
+	// So 1 amp = 170 i.e. 170mohms
 	threshold = 3300 + ((fg_current * 17) / 100);
 
 	if (fg_vcell <= threshold)
@@ -1147,6 +1536,8 @@ static int get_fuelgauge_soc(struct i2c_client *client)
 	int fg_vcell;
 	int fg_current;
 	int avg_current;
+// BIKETRONIC_BATT Add average voltage
+	int avg_voltage;
 	ktime_t current_time;
 	struct timespec ts;
 	int fullcap_check_interval;
@@ -1197,6 +1588,7 @@ static int get_fuelgauge_soc(struct i2c_client *client)
 
 	cable_type = value.intval;
 
+	//BIKETRONIC_BATT NOTE: never called as low_batt_boot_flag is always false for MAX17047 / KONA
 	if (fg_data->low_batt_boot_flag) {
 		fg_soc_raw = 0;
 
@@ -1213,6 +1605,9 @@ static int get_fuelgauge_soc(struct i2c_client *client)
 	fg_vcell = get_fuelgauge_value(client, FG_VOLTAGE);
 	fg_current = get_fuelgauge_value(client, FG_CURRENT);
 	avg_current = get_fuelgauge_value(client, FG_CURRENT_AVG);
+// BIKETRONIC_BATT Add average voltage
+	avg_voltage = max17047_get_avgvcell(client);
+//fg_data->avgvcell;
 	fg_vfsoc = get_fuelgauge_value(client, FG_VF_SOC);
 
 
@@ -1220,6 +1615,14 @@ static int get_fuelgauge_soc(struct i2c_client *client)
 				POWER_SUPPLY_PROP_STATUS,
 				&value);
 
+	// BIKETRONIC_BATT NOTE: FAKE FULL CHARGE / FULLCAP changes
+	// Calls set_full_charged which sets FULLCAP to REMCAP_REP
+	// i.e. FULLCAP is changed.
+	// if the if statement passes, it counts to 2 before setting.
+	// sets it to 100% once, and then sits on 3.
+	// VFSOC = voltage fuel guage
+	// From page 22, I thought this was done internally?
+	// CURRENT FOR FULLCAP LEARNING = 0.125-1.25 * 150mA (ICHGTerm) 0x1E not set!
 	/* Algorithm for reducing time to fully charged (from MAXIM) */
 	if (value.intval != POWER_SUPPLY_STATUS_DISCHARGING &&
 		value.intval != POWER_SUPPLY_STATUS_FULL &&
@@ -1248,11 +1651,19 @@ static int get_fuelgauge_soc(struct i2c_client *client)
 		fg_data->full_check_flag = 0;
 
 	/*	Checks vcell level and tries to compensate SOC if needed.*/
+	// BIKETRONIC_BATT NOTE: this originally reduces SOC to 0-3% on low voltage
+	// changed to brand new look up table based SOC correction under ~3500mV
+	// also added reference to powersupplytype USB as this is set to
+	// discharging elsewhere, whereas with a custom kernel and 
+	//current limit >475mA it may actually be charging...
+	// and the battery internal resistance seems to be different 
+	//under charge, causing incorrect % state of charge levels.
 	/*	If jig cable is connected, then skip low batt compensation check. */
 	if (is_jig_attached != JIG_ON &&
-		value.intval == POWER_SUPPLY_STATUS_DISCHARGING) {
-		fg_soc = low_batt_compensation(
-			client, fg_soc, fg_vcell, fg_current);
+		value.intval == POWER_SUPPLY_STATUS_DISCHARGING &&
+			cable_type != POWER_SUPPLY_TYPE_USB) {
+		fg_soc = prevent_bad_SOC(client, fg_soc, fg_vcell, fg_current, avg_current, avg_voltage); 
+			/*low_batt_compensation(client, fg_soc, fg_vcell, fg_current);*/
 		fg_soc_raw = get_fuelgauge_value(client, FG_RAW_SOC);
 	}
 
@@ -1279,6 +1690,9 @@ return_soc:
 	return fg_soc;
 }
 
+//BIKETRONIC_BATT NOTE: KEEP_FULL_SOC etc. used here:
+// reduces full_soc to raw_soc - 1% (reduced approx by KEEP_FULL_SOC)
+// and limits full_soc to 97-99%
 static void max17047_adjust_fullsoc(struct i2c_client *client)
 {
 	struct max17047_fuelgauge_data *fg_data =
@@ -1293,13 +1707,15 @@ static void max17047_adjust_fullsoc(struct i2c_client *client)
 		return;
 	}
 
+
 	if (raw_soc < FULL_SOC_LOW)
 		fg_data->full_soc = FULL_SOC_LOW;
 	else if (raw_soc > FULL_SOC_HIGH) {
 		keep_soc = FULL_SOC_HIGH / 100;
 		fg_data->full_soc = (FULL_SOC_HIGH - keep_soc);
 	} else {
-		keep_soc = ((raw_soc * KEEP_FULL_SOC) / 10000);
+		keep_soc = ((raw_soc * KEEP_FULL_SOC) / 10000);	
+
 		if (raw_soc > (FULL_SOC_LOW + keep_soc))
 			fg_data->full_soc = raw_soc - keep_soc;
 		else
@@ -1485,6 +1901,8 @@ static enum power_supply_property max17047_fuelgauge_props[] = {
 	POWER_SUPPLY_PROP_TEMP,
 };
 
+/* BIKETRONIC_BATT NOTE: Data transfer outside the kernel to samsung_battery.c probably happens from here*/
+/* add capacity */
 static int max17047_get_property(struct power_supply *psy,
 			    enum power_supply_property psp,
 			    union power_supply_propval *val)
@@ -1534,6 +1952,23 @@ static int max17047_get_property(struct power_supply *psy,
 		case SOC_TYPE_FULL:
 			val->intval = fg_data->full_soc;
 			break;
+
+//FG_AVCAP is unfiltered MIX
+//FG_MIXCAP is filtered ex empty compensation
+//FG_REPCAP filtered ver of RempcapAV inc empty compensation, used everywhere.
+//		case MAH_TYPE_DESIGN:
+		case MAH_TYPE_FULL: //FG_FULLCAP
+			val->intval = get_fuelgauge_value(fg_data->client, FG_FULLCAP);
+			break;
+		case MAH_TYPE_NOW:
+			val->intval = get_fuelgauge_value(fg_data->client, FG_AVCAP);
+			break;
+		case MAH_TYPE_AVG: 
+			val->intval = get_fuelgauge_value(fg_data->client, FG_REPCAP);
+			break;
+//		case MAH_TYPE_VF: //REG_SOCVF
+//			val->intval = get_fuelgauge_value(fg_data->client, FG_MIXCAP);
+//		case MAX_TYPE_CC: 
 		default:
 			/* 1% unit */
 		val->intval = get_fuelgauge_soc(fg_data->client);
@@ -1615,7 +2050,8 @@ static int max17047_reset_soc(struct i2c_client *client)
 /* P8 is not turned off by Quickstart @3.4V
  * (It's not a problem, depend on mode data)
  * Power off for factory test(File system, etc..) */
-	vfocv = max17047_get_vfocv(client);
+//BIKETRONIC_BATT NOTE: Open circuit volts, on boot = not open cct voltage.
+	vfocv = max17047_get_vfocv(client); 
 	if (vfocv < POWER_OFF_VOLTAGE_LOW_MARGIN) {
 		dev_info(&client->dev, "%s: Power off condition(%d)\n",
 		__func__, vfocv);
@@ -1637,6 +2073,11 @@ static int max17047_reset_soc(struct i2c_client *client)
 	return 0;
 }
 
+//BIKETRONIC_BATT note: what calls this?
+// MAX17047_REG_FULLCAP (newfullcapdata=) 
+// MAX17047_REG_REMCAP_REP (= newfullcapdata)
+// MAX17047_REG_FULLCAP (= newfullcapdata)
+// Write 100% SOC
 void fg_fullcharged_compensation(struct i2c_client *client,
 		u32 is_recharging, bool pre_update)
 {
@@ -1684,29 +2125,30 @@ void fg_fullcharged_compensation(struct i2c_client *client,
 			(u16)(new_fullcap_data));
 	} else {
 	/* compare with previous capacity */
+	//BIKETRONIC_BATT change to max increase 20% max decrease 5% (120,95 from 110,90)
 		if (new_fullcap_data >
-			(fuelgauge->previous_fullcap * 110 / 100)) {
+			(fuelgauge->previous_fullcap * 120 / 100)) {
 			dev_info(&client->dev,
 				"%s: [Case 2] previous_fullcap = 0x%04x, NewFullCap = 0x%04x\n",
 				__func__, fuelgauge->previous_fullcap,
 				new_fullcap_data);
 
 			new_fullcap_data =
-				(fuelgauge->previous_fullcap * 110) / 100;
+				(fuelgauge->previous_fullcap * 120) / 100;
 
 			fg_write_register(client, MAX17047_REG_REMCAP_REP,
 				(u16)(new_fullcap_data));
 			fg_write_register(client, MAX17047_REG_FULLCAP,
 				(u16)(new_fullcap_data));
 		} else if (new_fullcap_data <
-			(fuelgauge->previous_fullcap * 90 / 100)) {
+			(fuelgauge->previous_fullcap * 95 / 100)) {
 			dev_info(&client->dev,
 				"%s: [Case 3] previous_fullcap = 0x%04x, NewFullCap = 0x%04x\n",
 				__func__, fuelgauge->previous_fullcap,
 				new_fullcap_data);
 
 			new_fullcap_data =
-				(fuelgauge->previous_fullcap * 90) / 100;
+				(fuelgauge->previous_fullcap * 95) / 100;
 
 			fg_write_register(client, MAX17047_REG_REMCAP_REP,
 				(u16)(new_fullcap_data));

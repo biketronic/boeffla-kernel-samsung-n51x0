@@ -44,14 +44,14 @@ static ssize_t ctia_store_property(struct device *dev,
 
 static struct device_attribute factory_attrs[] = {
 	FACTORY_ATTR(batt_reset_soc),
-	FACTORY_ATTR(batt_read_raw_soc),
-	FACTORY_ATTR(batt_read_adj_soc),
-	FACTORY_ATTR(batt_type),
+	FACTORY_ATTR(batt_read_raw_soc), //4060
+	FACTORY_ATTR(batt_read_adj_soc), // 41
+	FACTORY_ATTR(batt_type), //SDI_SDI
 	FACTORY_ATTR(batt_temp_adc),
 	FACTORY_ATTR(batt_temp_aver),
 	FACTORY_ATTR(batt_temp_adc_aver),
-	FACTORY_ATTR(batt_vol_aver),
-	FACTORY_ATTR(batt_vfocv),
+	FACTORY_ATTR(batt_vol_aver), // N/A, 3892333
+	FACTORY_ATTR(batt_vfocv), //3704000
 	FACTORY_ATTR(batt_lp_charging),
 	FACTORY_ATTR(batt_charging_source),
 	FACTORY_ATTR(test_mode),
@@ -66,11 +66,23 @@ static struct device_attribute factory_attrs[] = {
 	FACTORY_ATTR(batt_vf_adc),
 
 	/* not use */
-	FACTORY_ATTR(batt_vol_adc),
-	FACTORY_ATTR(batt_vol_adc_cal),
-	FACTORY_ATTR(batt_vol_adc_aver),
-	FACTORY_ATTR(batt_temp_adc_cal),
-	FACTORY_ATTR(auth_battery),
+	FACTORY_ATTR(batt_vol_adc), //returns 0
+	FACTORY_ATTR(batt_vol_adc_cal), //returns 0
+	FACTORY_ATTR(batt_vol_adc_aver), // returns N/A
+	FACTORY_ATTR(batt_temp_adc_cal), // N/A
+	FACTORY_ATTR(auth_battery), // N/A
+
+	/* BIKETRONIC_BATT additions to  */
+	/* /sys/devices/platform/samsung-battery/power_supply/battery */
+	/* /sys/class/power_supply/battery */
+	FACTORY_ATTR(batt_current_now),
+	FACTORY_ATTR(batt_current_avg), 
+	FACTORY_ATTR(batt_current), // alternative name for NOW
+//	FACTORY_ATTR(current_now), // alternative name already exists
+	FACTORY_ATTR(batt_capacity_full), 
+	FACTORY_ATTR(batt_capacity_now), 
+	FACTORY_ATTR(batt_capacity_avg), 
+	FACTORY_ATTR(batt_capacity), // alternative name for FULL
 
 #if defined(CONFIG_TARGET_LOCALE_KOR) || defined(CONFIG_MACH_M0_CTC)\
 	|| defined(CONFIG_MACH_T0_CHN_CTC)
@@ -108,6 +120,15 @@ enum {
 	BATT_VOL_ADC_AVER,
 	BATT_TEMP_ADC_CAL,
 	AUTH_BATTERY,
+
+	//BIKETRONIC_BATT
+	BATT_CURRENT_NOW,
+	BATT_CURRENT_AVG,
+	BATT_CURRENT,
+	BATT_CAPACITY_FULL,
+	BATT_CAPACITY_NOW,
+	BATT_CAPACITY_AVG,
+	BATT_CAPACITY,
 
 #if defined(CONFIG_TARGET_LOCALE_KOR) || defined(CONFIG_MACH_M0_CTC)\
 	|| defined(CONFIG_MACH_T0_CHN_CTC)
@@ -195,6 +216,37 @@ static ssize_t factory_show_property(struct device *dev,
 		val = info->battery_vfocv;
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
 		break;
+	// BIKETRONIC_BATT - new entries for current outside kernel
+	// added more generic version
+	case BATT_CURRENT_NOW:
+		battery_update_info(info);
+		val = info->battery_current_now;
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
+		break;
+	case BATT_CURRENT:
+	case BATT_CURRENT_AVG:
+		battery_update_info(info);
+		val = info->battery_current_avg;
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
+		break;
+	case BATT_CAPACITY:
+	case BATT_CAPACITY_FULL:
+		battery_update_info(info);
+		val = info->battery_capacity_full;
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
+		break;
+	case BATT_CAPACITY_NOW:
+		battery_update_info(info);
+		val = info->battery_capacity_now;
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
+		break;
+	case BATT_CAPACITY_AVG:
+		battery_update_info(info);
+		val = info->battery_capacity_avg;
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);
+		break;
+	//BIKETRONIC_BATT END
+
 	case BATT_LP_CHARGING:
 		val = info->lpm_state;
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", val);

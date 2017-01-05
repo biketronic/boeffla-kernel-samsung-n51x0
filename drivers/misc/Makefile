@@ -91,8 +91,12 @@ obj-$(CONFIG_MOBICORE_SUPPORT)  += tzic.o
 obj-$(CONFIG_MOBICORE_DRIVER)  += tzic.o
 
 # GPU Clock/Voltage control
+# only supports 4 steps and doesn't work anyway
+# only UV works
+ifeq ($(CONFIG_MALI_UMP_R3P1),y)
 obj-$(CONFIG_GPU_CLOCK_CONTROL)		+= gpu_clock_control.o
 obj-$(CONFIG_GPU_VOLTAGE_CONTROL)	+= gpu_voltage_control.o
+endif
 
 # Touchwake
 obj-$(CONFIG_TOUCH_WAKE)        += touch_wake.o

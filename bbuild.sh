@@ -10,10 +10,266 @@
 # Parameters to be configured manually
 #######################################
 
-BOEFFLA_VERSION="1.3-Samsung-n5120"
+BOEFFLA_VERSION="1.3bat17c-Samsung-n5120"
+#bat1 modified fuel guage basic battery figures & max charge voltage
+# POWER OFF LOW MARGIN 3.1V-3.2V, recharge drop value 0.1V, 4.2V charge
+#bat2 - added LOW BATT COMP voltage modifiers
+# also changed capacity change limits from +-10% to +20% -5%
+# because it is harder to get a full charge.
+# and hold SOC at minimum 6% >3.3V from 1.3% at >3.5V
+#bat3 - ignore safey margin on USB port, 1.2A charge
+# to prevent boot loops on bad USB cables.
+#bat4 - safety margin makes no difference on battery charge only mode
+# Increase LOW MARGIN (and therefore comp margin) to 3.2V as 3.1V was kicking in at 3.0V! No useful power around 3.0-3.2V.
+# Overall 200mV reduction.
+#bat5 - increase to 4.225V charge (4.18V reported at 4.2V) 
+#NB 4.225 -> 4.205V full, perfect.
+# Add BATT_CURRENT_NOW and BATT_CURRENT_AVG 
+# hopefully appears in 
+# /sys/devices/platform/samsung-battery/power_supply/battery
+# updated /arc/arm/mach-exynos/mach-kona.c battery (sanity check?) values
+#bat6 - add undervolt to 100-400mhz by extending function to 19 values
+#bat7 - add batt_capacity_full,avg,now, NB 4760mA default capacity
+# BUG - reports capacity of -360 - -318, clearly incorrect.
+#bat7G - set CONFIG_MALI_UMP_R3P1=y to n in boeffla_defconfig to allow undervolting etc.
+# rescinded because it makes no difference!!!!
+#bat8 - read val for capacity. looks suspiciously like current_now.... fixed. now returns 100(%?) :-(
+#bat 9 - fixed capacity bug
+# work on supporting SOC for voltages under 3500mV prevent_bad_SOC in max17047...c
+# code compiles, added. 
+#Uses resistive compensated look up table for SOC under 3500mV that isn't = 0%
+# fixed negative -> positive resistance bug
+#bat10 - tweak prevent_bad_SOC
+# remove all other low voltage mechanisms by setting to 2800mV
+# ignored low_boot stuff as it seems unusued.
+# despite this, it drops to zero at 3300mV....
+# bat 10a - no zero values in prevent_bad_SOC ex 2600mV....
+# effect is it goes to 1% even at 3160mV... So
+# problem is slow fluctuating current values and slow voltage response times?
+# i.e. current is reported as zero?
+#bat10b add average voltage
+#bat10c - average volage only AND fix return fg_soc;
+#warning I saw 7% at <2800mV!!!!! Then it rebooted.
+#first ex_sdcard failed at 2800mV
+#seems very good that nothing forces the power off. But.
+#now I get silly low %, should be 0 not 7
+#bat11 - MAX_SOC in prevent_bad_SOC
+# this should prevent 2800mV
+#bat11b - tweak - 3250 = 1% (3250-3160 was <5 minutes at 500mA)
+# 3300 = 6% hold the power on.
+# 3400 = 8-10% (MIN - LIMIT)
+# 3500 = 10-20%
+# 3600 = 20-30%
+#NB when charging 5% reached is 3700mV @.2ohm - unplug = 3500 est 3450 @ 0.2 ohm is actually 5% drops to 3300 within 10 minutes 3200 in a couple of minutes
+#bat11c
+#3300 = 2% // LOW
+#3400 = 3% sits on 3400 for 10 minutes.
+#3500 = 6-10% 
+#3700 = 20-30%
+#bat12 - remove all pointless values
+#3600 = 6-100% fixes bug where SOC max is always 30%!
+#3500 = 6-10% ... and as before 3400=3 - 3250=1%, 3160=0%
+#issue #12345 - charging with USB causes jump in % despite <0 current check
+# as USB charging = discharging....
+# fix by limiting 'minimum' to 6% - error is limited to this much extra capacity when dead.
+# and added cable_type != POWER_SUPPLY_TYPE_USB
+#BUG - for some reason dropped to 5% then 3% and 100mV too high???
+# e.g. 3400-3500 is <6%
+#bat12b
+# try increasing 3600 to 10% min and 3400 max to 6%
+# 3350 - 6,6%
+# 3500 - 8,10%
+# 3600 - 10,100%
+# at ~3350 with full load (3050mV) it goes to 0%
+# because resistance is not smoothed <3160mV = 1 mohm...
+#bat12c - fix resistance under 3160mV, jumps to 8% on charge still
+# check inst. current is <0
+#bad12d fix bug wrong table length (1 short) may have no effect
+# also note: batt_reset_soc - e.g. reported 288mAh but 5% showing
+# and batt_read_soc shows 9%
+# ran batt_reset_soc and it jumped from 5 to 9%?! probably just a fluke.
+# add BATT_CURRENT and BATT_CAPACITY (battery-factory.c)
+# BATT_CURRENT is current_now (might be too fast moving but hey)
+# wrong SOC not fixed, problem unknown. Reboot restores it.
+#jumps to 1% at about 3350 actual. - Max SOC not smoothed BUG fixed
+# set 6% drop off at 3300mV from 3350.
+# WORKS - drops from 5% to 1%
+#bat13
+#change to BATT_CURRENT = AVERAGE as most apps are dead slow.
+#gov1
+# mod zzmove or pegasususq (which has great response time)
+# so that it doesn't overclock unless absolutely necessary
+# VERY HARD
+# NB 3550-3600mV ~ 10%
+# Hit 10% and sat on it for ages, then 5% and off within 1 minute
+# having no upper limit caused this? 
+# voltage was very low, back and menu lights flickering. 
+# GAMING test: medium brightness, pegasusqplus 1920Mhz
+# 3:40 14%, 3.5-3.6V
+# 4:47 7%, 3.4-3.5V
+# 5:10 6-5-0%, 3.3V FLAT
+# So, at ~3550mV, 3.666 (220), 5.1666 (310) = 90 / 310 = 29%
+
+#bat14
+# Reduce 3300mV 6% to 3350mV (prevent 5% to off within 1 minute)
+# increase 3600 to 30% from 10%. (prevent sitting on 10% for 1 hour, should be >30% as per gaming test)
+# work on pegasusqplus - OC time limit.
+# work on board-kona-battery - charging limits? not used, ignored.
+#bat14b - beta - GOV pegasususq plus not complete, added 5 GPU in Bof control
+#/ramdisk_boeffla/fs/res/bc/ - fixed- removed intelliplug and added 2100mA usb
+# NB 5 GPU frequencies in the 4.4KK version
+# DOESN"T WORK - 
+#bat 15
+# copied across /drivers/gpu/mali stuff r3p2
+# seems to just add it anyway and adds gpu_control - nothing else required?
+# mod code to prevent jump to 30% - at least 300mA discharge or fuel guage not altered.
+#bat15b
+# CPU overclock 2ghz unstable. Try reserved bits on clock div, try 15 on 2ghz
+#bat15c
+# reverted mask change, a divisor of 15 doesn't improve 2ghz stability.
+# try to fix mali frequency control... MALI_U3P1 is not set should be set?
+# this should enable only /drivers/gpu/mali/u3p2
+# edited makefile in drivers/misc to remove gpu volt and clock control which is limited to 4 steps and doesn't work (doestn' exist in 442)
+# so only drivers/gpu/mali is enabled. Drivers/media/video/samsung/mali disabled.
+# but need to enable R3P1 in boeffla_defconfig or it won't compile
+# add to kernel/power/main.c which disables EXYNOS4_GPU_LOCK
+# OK can't get r3p2 to work
+# try fixing r3p1 - fixed 5 step gpu voltage and 5 step clock but clock is overwritten instantly
+# all in r3p1/platform/pegasusm400/mali_platform_dvfs.c
+#bat15d
+# add boost logic to mali_platform_dvfs so that it jumps up to step 4 instantly to reduce lag
+# it then has to drop back via each step
+#bat15e
+# mod pegasusqplus to boost - basic test beta - and fast down on OC
+#bat16
+# add counting logic to pegasususqplus
+# this seems suspect - seems to work sometimes? mostly limits to 1500
+# also jumps a lot and doesn't sit on 1100. Likes 100, 900, 1500 and 1920
+# very snappy though.
+#bat16b
+# fix laggy gpu by reducing thresholds - once it boosts it won't keep dropping and jumping up.
+# reduce from 90 to 65 up and half down threshold except fastest frequency and idle
+# fix pegasususqplus - reduce OC thresholds from 95 to 90 and frequency step to 5% up ex boost
+# remove OC time bug, where it never uses time below OC_COOL_TIME_MIN
+# seems to always sit on 1920 now?! never goes down, 
+# gpu much smoother
+#bat16c
+# fix pegasusqplus - change thresholds, check for <= ratio not zero.
+# and sit on 1100 on the way back down.
+# bootup is 1500 (expected)
+#bat16d
+# sanity check oc_cool_time
+# starts at 1500...
+# 1920 still using 20% CPU!!!!!!!!!!
+# seems to set oc cool time to 0 initially but then it somehow goes bonkers
+#bat16e
+# rewrite down threshold - no real change?
+# up threshold fix bug, where it multiplied inc by 5 instead of 5/100
+# this would always jump to max cpu....
+# moved static int to inside dbs_check_cpu
+# CRASH at 1920mhz, 1800mhz but not 1704? - could be accidental -25mv no, crashes anyway.
+# does limit to 1500Mhz properly.
+#bat16f
+# fix divide by zero / (policy->max - policy->cur)!!!! in pegasusqplus
+# new bug, can't exceed 1500mhz
+# by some fluke it went there for 1 second in 13 minutes.
+#bat16g
+# divide by zero was fixed wrong! change <= to >=
+# this should fix can't exceed 1500mhz as it was always resetting oc_cool_time if it OC'd
+# but it crashes? or not. Crashed on suspend suspect graphics. Try avoiding 54.
+# Crashes on 1920Mhz.
+# Almost never OCs - 
+#bat16h
+# decrease ratio from 30 as it was only using 0.8%- 2% OC 
+# disable jump to high or OC frequency
+# does OC for about 2 seconds.
+#OC is 10% now. for a ratio of 10.
+# CRASH
+# Crash on power on
+#bat16i
+# move oc_cool_time to hotplug_historyplus in case it is being lost somewhere...
+# CRASH on change in cpu speed up to OC from low speed suspected
+# try limit to 1704 - seems ok
+# try 1800 - seems ok
+# try 1920 at 1375 from 1350 stable CRASH - garbled graphics - problem is GPU?
+# 1920 CRASH instantly with standard GPU settings
+# I think the divide by zero must be a problem somehow still???????
+#bat16j
+# remove divide by zero issue by simply subtracting ratio above OC level.
+# 1920? CRASH. 1800 works perfectly. 1920 crashes.
+# Both use OC cool time etc... ????
+#bat16k
+# remove 'bug fix' IS UNCHANGED. Shift drop to ideal freq point so it will drop down
+# mods to down to ensure drop.
+# try OC -> IDEAL HIGH -> IDEAL -> lower so it doesn't jump to 1100.
+# seems stable.... but it's not.
+#bat16l
+# consider changes before crash - mods to up threshold increment and oc cool time.
+# try removing oc_cool_time code....
+# now it is just up down threshold mod.
+# crashes instantly, no delay this time.
+#bat16m
+# remove boost freq code
+# remove almost all code
+# decrement is 10% of max
+# a very boring governor. Won't exceed 1704.
+# only thresholds remain but won't exceed 1704
+# try rebooting
+# If i use another governor then switch to it, it crashes at 1920.
+#bat16n
+# found bug - max_load = load was not attached to the if statement properly
+# this could prevent exceeding 1704 sometimes?
+# use normal freq step khz instead
+# remove if freq_next > 0.
+#bat16o
+# no idea what else to do
+# still limited to 1704
+# try increasing frequency step to 250000khz
+#changed method of calculating max_load to divide max_load_freq
+# Now goes to 1800.... So the frequency step does it???
+#bat16p
+# reduce OC threshold to 80/85 from 85/90
+# revert frequency step to 120000khz
+# can't do above 1704.... wtf
+# crash
+#bat16q
+# revive freq_step
+# DOESN'T CRASH. Setting inc = ..... made all the difference
+# Does go to 1920mhz
+# crashed taking a photo
+# try clearing cache
+# crashes taking a photo again frequency bounces up and down
+# seems stable except crashes when using the camera...
+# something about the down threshold logic crashes the cpu.....
+# sometimes survives camera from 100mhz
+
+#bat16r
+# revive cool operation (up threshold)
+# revive down threshold ideal and ideal high drop down on cool
+# add min, max checks before changing CPU speed.
+# revert threshold OC to 85-90
+# revert threshold 1100 to 10 down (100% at 100mhz)
+# boost frequency left disabled.
+# crash on camera still. WTF is causing this? pegasusq at 1920 doesn't crash.
+# maybe it can't drop in frequency under full load? But then the minimal governor doesn't change this...? and it only went down at 100mhz at a time.
+
+#bat17a
+# give up on pegasususq
+# modify pegasusq, remove hotplug code...
+# add oc_time
+# gov does not appear
+#bat17b 
+# try changing the governor name to be unique - change from pegasusq to cpufreq_gov_pegasusq_biketronic
+# and register this unique name.
+# did not work.
+#bat17c
+# try editing kconfig
+
 EXTENDED_CMDLINE=""
 
-TOOLCHAIN="/opt/toolchains/arm-eabi-4.8/bin/arm-eabi-"
+#sabremod compiled
+TOOLCHAIN="/media/eric/SSDFiles/n5120_kernel_source/arm-linux-gnueabi-4.8/bin/arm-eabi-"
+#/opt/toolchains/arm-eabi-4.8/bin/arm-eabi-"
 
 COMPILE_DTB="n"
 MODULES_IN_SYSTEM="n"
@@ -54,6 +310,12 @@ SMB_AUTH_KERNEL=""
 SMB_SHARE_BACKUP=""
 SMB_FOLDER_BACKUP=""
 SMB_AUTH_BACKUP=""
+
+# BIKETRONIC NOTE
+# This was set to 5 CPUS????
+# -j5 allow 5 jobs at once
+# 348 sec 4 CPU
+# 344 sec 5 CPU
 
 NUM_CPUS="5"	# number of cpu cores used for build
 

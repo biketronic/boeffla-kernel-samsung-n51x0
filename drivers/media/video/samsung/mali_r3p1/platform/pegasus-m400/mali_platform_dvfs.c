@@ -13,6 +13,8 @@
  * Platform specific Mali driver dvfs functions
  */
 
+/* BIKETRONIC_GPU NOTE: overwrites clock speeds so you can't tune it - FIX? */
+
 #include "mali_kernel_common.h"
 #include "mali_osk.h"
 #include "mali_platform.h"
@@ -30,15 +32,25 @@
 #define MAX_MALI_DVFS_STEPS 5
 #define MALI_DVFS_WATING 10 // msec
 #define PD_G3D_LOCK_FLAG 2
+//BIKETRONIC_GPU - speed mods:
+// quick jump up to a high step to reduce lag
+// This means you can set lower clocks
+// e.g. 54 108 160 266 350 will now jump to 266 from 54 or 108 instead of lagging for 5 frames.
+// OR 54 160 350 533 700 will jump to 533 before dropping.
+// and can increase time before reducing frequency or reduce here.
+#define BOOST_STEP_MINIMUM 2 //if at or below this level, boost to BOOST_STEP_TARGET (1-5)
+#define BOOST_STEP_TARGET 4 //boost to this step from step BOOST_STEP_MINIMUM (1-5)
+#define STAY_COUNT_BEFORE_DOWN 5 //remove magic number
 
-#ifdef CONFIG_CPU_FREQ
+#ifdef CONFIG_CPU_FREQ // BIKETRONIC_GPU NOTE: is enabled
 #include <mach/asv.h>
-#define EXYNOS4_ASV_ENABLED
+#define EXYNOS4_ASV_ENABLED // BIKETRONIC_GPU NOTE: is enabled
 #endif
 
 #include <plat/cpu.h>
 
 #define CHIPID_REG		(S5P_VA_CHIPID + 0x4)
+
 
 static int bMaliDvfsRun=0;
 
@@ -71,6 +83,7 @@ typedef struct mali_dvfs_stepTag{
 	int vol;
 }mali_dvfs_step;
 
+//BIKETRONIC_GPU bk removed this table
 mali_dvfs_step step[MALI_DVFS_STEPS]={
 	/*step 0 clk*/ {160,   875000},
 #if (MALI_DVFS_STEPS > 1)
@@ -110,6 +123,7 @@ mali_dvfs_staycount_table mali_dvfs_staycount[MALI_DVFS_STEPS]={
 // L3 = 266Mhz, 0.90V
 // L4 = 160Mhz, 0.875V
 
+//BIKETRONIC_GPU bk removed CPU lock
 int step0_clk = 160;
 int step0_vol = 875000;
 #if (MALI_DVFS_STEPS > 1)
@@ -144,6 +158,9 @@ mali_dvfs_table mali_dvfs_all[MAX_MALI_DVFS_STEPS]={
 	{440   ,1000000   , 1025000},
 	{533   ,1000000   , 1075000} };
 
+/*BIKETRONIC_GPU NOTE This table is overwritten */
+/* this is the table that bk writes to */
+/* .vol and .clock (clock-freq-vol) */
 mali_dvfs_table mali_dvfs[MALI_DVFS_STEPS]={
 	{160   ,1000000   , 875000},
 #if (MALI_DVFS_STEPS > 1)
@@ -160,16 +177,36 @@ mali_dvfs_table mali_dvfs[MALI_DVFS_STEPS]={
 #endif
 };
 
+/* BIKETRONIC_GPU NOTE */
+/* this is overwritten somewhere?? */
+/* reports */
+/*
+* ?0 27
+* 24 35
+* 33 35
+* 33 35
+* 37 ?100
+*/
+
+/* too laggy - jumps up and down on google maps
+* was 
+* 0 70
+* 62 90
+* 85 90
+* 85 90
+* 95 100
+* set to HALF
+*/
 mali_dvfs_threshold_table mali_dvfs_threshold[MALI_DVFS_STEPS]={
-	{0   , 70},
+	{0   , 70}, // idle
 #if (MALI_DVFS_STEPS > 1)
-	{62  , 90},
+	{21  , 65}, // needs to be real low to drop down
 #if (MALI_DVFS_STEPS > 2)
-	{85  , 90},
+	{42  , 65}, // med
 #if (MALI_DVFS_STEPS > 3)
-	{85  ,90},
+	{42  ,85}, // needs to be real high to OC
 #if (MALI_DVFS_STEPS > 4)
-	{95  ,100}
+	{85  ,100} // OC
 #endif
 #endif
 #endif
@@ -179,7 +216,7 @@ mali_dvfs_threshold_table mali_dvfs_threshold[MALI_DVFS_STEPS]={
 #ifdef EXYNOS4_ASV_ENABLED
 #define ASV_LEVEL     12	/* ASV0, 1, 11 is reserved */
 #define ASV_LEVEL_PRIME     13	/* ASV0, 1, 12 is reserved */
-#define ASV_LEVEL_PD	13
+#define ASV_LEVEL_PD	13 /*removed BK*/
 
 
 static unsigned int asv_3d_volt_9_table_1ghz_type[MALI_DVFS_STEPS-1][ASV_LEVEL] = {
@@ -208,6 +245,12 @@ static unsigned int asv_3d_volt_9_table[MALI_DVFS_STEPS-1][ASV_LEVEL] = {
 #endif
 };
 
+/* BIKETRONIC_GPU NOTE: looks like the second values are default */
+/* exynos_result_of_asv = 1 */
+/* 937,962,1012,1075, 1137 */
+/* actual min */
+/* -100 is no artifacts but crashes? */
+/* 825,875,950,1000,1050 = asv level 9-12*/
 static unsigned int asv_3d_volt_9_table_for_prime[MALI_DVFS_STEPS][ASV_LEVEL_PRIME] = {
 	{  950000,  937500,  925000,  912500,  900000,  887500,  875000,  862500,  875000,  862500,  850000,  850000,  850000},  /* L4(160Mhz) */
 #if (MALI_DVFS_STEPS > 1)
@@ -224,6 +267,7 @@ static unsigned int asv_3d_volt_9_table_for_prime[MALI_DVFS_STEPS][ASV_LEVEL_PRI
 #endif
 };
 
+// UNUSED (removed BK)
 static unsigned int asv_3d_volt_4212_9_table[MALI_DVFS_STEPS][ASV_LEVEL_PD] = {
 	{  950000,  925000,  900000,  900000,  900000,  900000,  900000,  900000,  875000,  850000,  850000,  850000, 850000},	/* L3(160Mhz) */
 #if (MALI_DVFS_STEPS > 1)
@@ -254,6 +298,7 @@ int mali_runtime_resumed = -1;
 
 static DECLARE_WORK(mali_dvfs_work, mali_dvfs_work_handler);
 
+//BIKETRONIC_GPU bk removed CPU lock
 /* lock/unlock CPU freq by Mali */
 #include <linux/types.h>
 #include <mach/cpufreq.h>
@@ -299,6 +344,7 @@ void cpufreq_unlock_by_mali(void)
 	}
 #endif
 }
+//BIKETRONIC_GPU end of bk removed CPU lock
 
 static unsigned int get_mali_dvfs_status(void)
 {
@@ -320,6 +366,9 @@ mali_bool set_mali_dvfs_current_step(unsigned int step)
 	return MALI_TRUE;
 }
 #endif
+
+// This actually sets the frequency
+// boostup just sets the order of voltage first or frequency
 static mali_bool set_mali_dvfs_status(u32 step,mali_bool boostup)
 {
 	u32 validatedStep=step;
@@ -362,6 +411,7 @@ static mali_bool set_mali_dvfs_status(u32 step,mali_bool boostup)
 	/*for future use*/
 	maliDvfsStatus.pCurrentDvfs = &mali_dvfs[validatedStep];
 
+//BIKETRONIC_GPU bk removed CPU lock
 #if CPUFREQ_LOCK_DURING_440
 	/* lock/unlock CPU freq by Mali */
 	if (mali_dvfs[step].clock >= 440)
@@ -408,9 +458,12 @@ extern unsigned int exynos_result_of_asv;
 
 static mali_bool mali_dvfs_table_update(void)
 {
-	unsigned int i, tmp, g3d_lock_volt = 0;
+	unsigned int i;
+//BIKETRONIC_GPU bk removed
+//, tmp, g3d_lock_volt = 0;
 	unsigned int step_num = MALI_DVFS_STEPS;
-	bool lock_flag_g3d = false;
+//BIKETRONIC_GPU bk removed
+//	bool lock_flag_g3d = false;
 
 	if(samsung_rev() < EXYNOS4412_REV_2_0)
 		step_num = MALI_DVFS_STEPS - 1;
@@ -428,6 +481,11 @@ static mali_bool mali_dvfs_table_update(void)
 				mali_dvfs[i].vol = asv_3d_volt_9_table_for_prime[i][exynos_result_of_asv] + 25000;
 				MALI_PRINT(("mali_dvfs[%d].vol = %d \n ", i, mali_dvfs[i].vol));
 			}
+/* BIKETRONIC_GPU note: must be this one */
+/* reads from table position exynos_result_of_asv */
+/* "Adaptive Supply Voltage" */
+/* default = 1 */
+/* ref asv.c or asc-4x12.c in mach-exynos, based on fused chip value */
 		} else if (samsung_rev() >= EXYNOS4412_REV_2_0) {
 			MALI_PRINT(("::P::exynos_result_of_asv : %d\n", exynos_result_of_asv));
 			for (i = 0; i < step_num; i++) {
@@ -442,7 +500,8 @@ static mali_bool mali_dvfs_table_update(void)
 			}
 		}
 	}
-	else if(soc_is_exynos4212()) {
+//BIKETRONIC_GPU bk removed lock
+/*	else if(soc_is_exynos4212()) {
 		tmp = __raw_readl(CHIPID_REG);
 		lock_flag_g3d = (tmp >> PD_G3D_LOCK_FLAG) & 0x1;
 		if (lock_flag_g3d)
@@ -454,14 +513,18 @@ static mali_bool mali_dvfs_table_update(void)
 			MALI_PRINT(("mali_dvfs[%d].vol = %d\n", i, mali_dvfs[i].vol));
 		}
 	}
-
+*/
 	return MALI_TRUE;
 }
 #endif
 
+// BIKETRONIC_GPU: SPEEDBOOST HERE
+// e.g. google maps. Major lag.
+// it has to go through each speed step and each speed step takes 1 frame.
+// Jump straight to top step from bottom step only.
 static unsigned int decideNextStatus(unsigned int utilization)
 {
-	static unsigned int level = 0; // 0:stay, 1:up
+	static unsigned int level = 0; // 0:stay, 1:up NOT TRUE - is the actual step from 0-4
 	static int mali_dvfs_clk = 0;
 
 	if (mali_runtime_resumed >= 0) {
@@ -477,25 +540,34 @@ static unsigned int decideNextStatus(unsigned int utilization)
 		return level;
 	}
 
-	if (!mali_dvfs_control && level == maliDvfsStatus.currentStep) {
+//BIKETRONIC_GPU bk removed
+//	if (!mali_dvfs_control && level == maliDvfsStatus.currentStep) {
 		if (utilization > (int)(255 * mali_dvfs_threshold[maliDvfsStatus.currentStep].upthreshold / 100) &&
 				level < MALI_DVFS_STEPS - 1) {
-			level++;
-			if ((samsung_rev() < EXYNOS4412_REV_2_0) && (maliDvfsStatus.currentStep == 3)) {
-				level=get_mali_dvfs_status();
+			if (level <= (BOOST_STEP_MINIMUM - 1)) {
+				level++;
+			} else {
+				level = (BOOST_STEP_TARGET - 1);
 			}
+//BIKETRONIC_GPU bk removed
+//			if ((samsung_rev() < EXYNOS4412_REV_2_0) && (maliDvfsStatus.currentStep == 3)) {
+//				level=get_mali_dvfs_status();
+//			}
 		}
 		if (utilization < (int)(255 * mali_dvfs_threshold[maliDvfsStatus.currentStep].downthreshold / 100) &&
 				level > 0) {
 			level--;
 		}
+
+//BIKETRONIC_GPU bk removed
+/*
 	} else if (mali_dvfs_control == 999) {
 		int i = 0;
 		for (i = 0; i < MALI_DVFS_STEPS; i++) {
 			step[i].clk = mali_dvfs_all[i].clock;
 		}
 #ifdef EXYNOS4_ASV_ENABLED
-		mali_dvfs_table_update();
+		mali_dvfs_table_update(); 
 #endif
 		i = 0;
 		for (i = 0; i < MALI_DVFS_STEPS; i++) {
@@ -576,6 +648,7 @@ static unsigned int decideNextStatus(unsigned int utilization)
 	}
 
 	mali_dvfs_clk = mali_dvfs_control;
+*/
 
 	if (_mali_osk_atomic_read(&bottomlock_status) > 0) {
 		if (level < bottom_lock_step)
@@ -590,7 +663,7 @@ static mali_bool mali_dvfs_status(u32 utilization)
 	unsigned int nextStatus = 0;
 	unsigned int curStatus = 0;
 	mali_bool boostup = MALI_FALSE;
-	static int stay_count = 5;
+	static int stay_count = STAY_COUNT_BEFORE_DOWN; // down delay
 #ifdef EXYNOS4_ASV_ENABLED
 	static mali_bool asv_applied = MALI_FALSE;
 #endif
@@ -607,34 +680,41 @@ static mali_bool mali_dvfs_status(u32 utilization)
 #endif
 
 	/*decide next step*/
-	curStatus = get_mali_dvfs_status();
-	nextStatus = decideNextStatus(utilization);
+	curStatus = get_mali_dvfs_status(); // actual current level in steps (0-4)
+	nextStatus = decideNextStatus(utilization); // next level in steps (0-4)
 
 	MALI_DEBUG_PRINT(1, ("= curStatus %d, nextStatus %d, maliDvfsStatus.currentStep %d \n", curStatus, nextStatus, maliDvfsStatus.currentStep));
 
 	/*if next status is same with current status, don't change anything*/
 	if(curStatus != nextStatus) {
 
-		/*check if boost up or not*/
-            if(maliDvfsStatus.currentStep < nextStatus) {
+//BIKETRONIC_GPU this was also modified- not quite sure it looks similar
+// stay count seems to prevent dropping GPU frequency, bk removed this feature, I'm leaving it alone.
+
+		//check if boost up or not
+            if(maliDvfsStatus.currentStep < nextStatus) { //step up
                     boostup = 1;
-                    stay_count = 5;
+                    stay_count = STAY_COUNT_BEFORE_DOWN;
             }
-            else if (maliDvfsStatus.currentStep > nextStatus){
+            else if (maliDvfsStatus.currentStep > nextStatus){ // step down
                     stay_count--;
             }
-            if( boostup == 1 || stay_count <= 0){
-		/*change mali dvfs status*/
+            if( boostup == 1 || stay_count <= 0){ //step up or step down reached
+
+		//change mali dvfs status
+		//nextStatus = actual level in steps (0-4) boostup sets change voltage or frequency first
                     if (!change_mali_dvfs_status(nextStatus,boostup)) {
                             MALI_DEBUG_PRINT(1, ("error on change_mali_dvfs_status \n"));
                             return MALI_FALSE;
                     }
+
                     boostup = 0;
-                    stay_count = 5;
+                    stay_count = STAY_COUNT_BEFORE_DOWN;
             }
+
 	}
 	else
-			stay_count = 5;
+			stay_count = STAY_COUNT_BEFORE_DOWN;
 
 	return MALI_TRUE;
 }
@@ -662,7 +742,10 @@ static void mali_dvfs_work_handler(struct work_struct *w)
 	int change_step = 0;
 	bMaliDvfsRun=1;
 
-	/* dvfs table change when clock was changed */
+// BIKETRONIC_GPU - removed table overwriting code
+/*
+
+	// dvfs table change when clock was changed
 	if (step0_clk != mali_dvfs[0].clock) {
 		MALI_PRINT(("::: step0_clk change to %d Mhz\n", step0_clk));
 		change_clk = step0_clk;
@@ -742,6 +825,8 @@ static void mali_dvfs_work_handler(struct work_struct *w)
 	mali_dvfs[3].vol = step3_vol;
 	mali_dvfs[4].vol = step4_vol;
 #endif
+*/
+
 	MALI_DEBUG_PRINT(3, ("=== mali_dvfs_work_handler\n"));
 
 	if (!mali_dvfs_status(mali_dvfs_utilization))
@@ -785,6 +870,12 @@ mali_bool mali_dvfs_handler(u32 utilization)
 	return MALI_TRUE;
 }
 
+// BIKETRONIC_GPU Note: only changes if <mali_dvfs_all
+// REMOVE table overwriting code
+// THIS LOCKS GPU AT 1200MHZ - this is a good idea prevents choppy graphics.
+// Re-enable?
+// FIXME?
+/*
 int change_dvfs_tableset(int change_clk, int change_step)
 {
 	int err;
@@ -805,14 +896,14 @@ int change_dvfs_tableset(int change_clk, int change_step)
 
 	if (maliDvfsStatus.currentStep == change_step) {
 #ifdef CONFIG_REGULATOR
-		/*change the voltage*/
+		//change the voltage
 		mali_regulator_set_voltage(mali_dvfs[change_step].vol, mali_dvfs[change_step].vol);
 #endif
-		/*change the clock*/
+		//change the clock
 		mali_clk_set_rate(mali_dvfs[change_step].clock, mali_dvfs[change_step].freq);
 
 #if CPUFREQ_LOCK_DURING_440
-		/* lock/unlock CPU freq by Mali */
+		// lock/unlock CPU freq by Mali 
 		if (mali_dvfs[change_step].clock >= 440)
 			err = cpufreq_lock_by_mali(400);
 		else
@@ -822,6 +913,7 @@ int change_dvfs_tableset(int change_clk, int change_step)
 
 	return mali_dvfs[change_step].clock;
 }
+*/
 
 void mali_default_step_set(int step, mali_bool boostup)
 {
@@ -863,6 +955,8 @@ int mali_dvfs_bottom_lock_pop(void)
 
 	return _mali_osk_atomic_dec_return(&bottomlock_status);
 }
+// Removed in platform rewrite
+// COMPILE ERROR if removed FIXME?
 
 int mali_dvfs_get_vol(int step)
 {

@@ -120,10 +120,33 @@ int ignore_safety_margin = IGNORE_SAFETY_MARGIN_DEFAULT;
 #define MAX77693_CHG_MINVSYS_3_6V	0x06
 #define MAX77693_CHG_CV_PRM_MASK		0x1F
 #define MAX77693_CHG_CV_PRM_SHIFT		0
+//BIKETRONIC_BATT START 
+// MAX77693 CHG_CV step is 0.025V from valid range of 3.65 to 4.40V
+// Trade off is 5% capacity for 50% more cycles.
+// Volts Cycles Capacity
+//>4.3V DANGER - Unless you have a special samsung battery it will fail
+//4.3V  50% 106% << half life for temporary small capacity gain
+//4.25  71% 105% 
+//4.225 ??  ??   <<Small boost to allow for internal resistances
+//4.2V 100% 100% <<Normal for generic
+//4.15 140% 94%  << 1.4x life for 5% initial capacity loss
+//4.1V 200% 89%  << 2.0x life for 10% << ideal max for always plugged in
+//4.05 280% 83%  << 2.8x life for 17% 
+//4.0V 400% 73%  << 4.0x life for 25% 
+//3.9V 800% 62%  << maximum life for 40% initial capacity loss
+#define MAX77693_CHG_CV_PRM_3_90V		0x04
+#define MAX77693_CHG_CV_PRM_3_95V		0x06
+#define MAX77693_CHG_CV_PRM_4_00V		0x08
+#define MAX77693_CHG_CV_PRM_4_05V		0x10
+#define MAX77693_CHG_CV_PRM_4_10V		0x12
+#define MAX77693_CHG_CV_PRM_4_15V		0x14
 #define MAX77693_CHG_CV_PRM_4_20V		0x16
+#define MAX77693_CHG_CV_PRM_4_225V		0x17
+#define MAX77693_CHG_CV_PRM_4_25V		0x18
 #define MAX77693_CHG_CV_PRM_4_30V		0x1A
 #define MAX77693_CHG_CV_PRM_4_35V		0x1D
-#define MAX77693_CHG_CV_PRM_4_40V		0x1F
+//#define MAX77693_CHG_CV_PRM_4_40V		0x1F DO NOT USE
+//BIKETRONIC_BATT END
 
 /* MAX77693_CHG_REG_CHG_CNFG_06 */
 #define MAX77693_CHG_CHGPROT		0x0C
@@ -1228,7 +1251,10 @@ static void max77693_charger_reg_init(struct max77693_charger_data *chg_data)
 	else
 		reg_data |= (MAX77693_CHG_CV_PRM_4_20V << 0);
 #elif defined(CONFIG_MACH_KONA)
-		reg_data |= (MAX77693_CHG_CV_PRM_4_30V << 0);
+	//BIKETRONIC_BATT -> REDUCE FROM 4.3V CHARGE TO 4.2V
+	//NOTE, read value is 4.18 at "4.2V", 
+	//charge to 4.225V to make up for volt drop
+		reg_data |= (MAX77693_CHG_CV_PRM_4_225V << 0);
 #else	/* C1, C2, M3, T0, ... */
 		reg_data |= (MAX77693_CHG_CV_PRM_4_35V << 0);
 #endif

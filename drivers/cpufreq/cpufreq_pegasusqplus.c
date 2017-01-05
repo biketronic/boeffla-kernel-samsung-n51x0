@@ -14,6 +14,29 @@
  * published by the Free Software Foundation.
  */
 
+/*
+* BIKETRONIC mod: This is a great governor (or should be) 
+* Main issue is overclocking - 
+* if you have a heavy load, any governor will go to full speed
+* and this could happen for an indefinite period!
+* Soltion:
+* set a time limit for use of processor above say 1100Mhz
+* Say at full OC 1920Mhz, at most 20% of the time
+* At 1500Mhz, 50% of the time
+* So after 1 secont at 1920Mhz it drops to 1500
+* After 5 seonds at 1500 it drops to 1100
+* Reset when frequency drops below 1100 for 20 seconds.
+* idea:
+* for example there is a variable with = 1 second left, add 1/10 second every 20/10 second 
+* up to a maximum total.
+* Otherwise try to be the same as the pegasususq governor
+* because it works.
+* Is this basically samsung's DVFS?
+*
+*/
+
+
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -142,72 +165,121 @@ static unsigned int get_nr_run_avg(void)
  * It helps to keep variable names smaller, simpler
  */
 
-#define DEF_SAMPLING_DOWN_FACTOR		(1)
-#define MAX_SAMPLING_DOWN_FACTOR		(100000)
-#define DEF_FREQUENCY_DOWN_DIFFERENTIAL		(5)
-#define DEF_FREQUENCY_UP_THRESHOLD		(82)
+#define DEF_SAMPLING_DOWN_FACTOR		(1) //was 2
+#define MAX_SAMPLING_DOWN_FACTOR		(100000) //same
+#define DEF_FREQUENCY_DOWN_DIFFERENTIAL		(5) // same
+#define DEF_FREQUENCY_UP_THRESHOLD		(82) //was 85
 /* for multiple freq_step */
 #define DEF_UP_THRESHOLD_DIFF			(6)
-#define DEF_FREQUENCY_MIN_SAMPLE_RATE		(10000)
-#define MIN_FREQUENCY_UP_THRESHOLD		(11)
-#define MAX_FREQUENCY_UP_THRESHOLD		(100)
-#define DEF_SAMPLING_RATE			(30000)
-#define MIN_SAMPLING_RATE			(10000)
+#define DEF_FREQUENCY_MIN_SAMPLE_RATE		(10000) //same
+#define MIN_FREQUENCY_UP_THRESHOLD		(11) //same
+#define MAX_FREQUENCY_UP_THRESHOLD		(100) //same
+#define DEF_SAMPLING_RATE			(30000)//faster than usq, was 50000
+#define MIN_SAMPLING_RATE			(10000) //same
 #define MAX_HOTPLUG_RATE			(40u)
 
+/* reality:
+* Takes a couple of seconds to drop out or drop in 1 Core
+* Runs with 3 or 4 cores.
+* Except on sleep it has 1 core?
+*/
 #define DEF_MAX_CPU_LOCK			(0)
 #define DEF_MIN_CPU_LOCK			(0)
-#define DEF_UP_NR_CPUS				(1)
-#define DEF_CPU_ONLINE_BIAS_COUNT		(2)
-#define DEF_CPU_ONLINE_BIAS_UP_THRESHOLD	(65)
-#define DEF_CPU_ONLINE_BIAS_DOWN_THRESHOLD	(30)
+#define DEF_UP_NR_CPUS				(1) // ? same
+#define DEF_CPU_ONLINE_BIAS_COUNT		(2) // at > this # CPUs:
+#define DEF_CPU_ONLINE_BIAS_UP_THRESHOLD	(65) // >65% turn one on
+#define DEF_CPU_ONLINE_BIAS_DOWN_THRESHOLD	(30) // <30% turn one off
 
-#define DEF_CPU_UP_RATE				(16)
-#define DEF_CPU_DOWN_RATE			(30)
+// HOT PLUG
+#define DEF_CPU_UP_RATE				(16) //was 10 16
+#define DEF_CPU_DOWN_RATE			(30) //was 20 30
 
-#define DEF_FREQ_STEP				(37)
+// NOT USED
+#define DEF_FREQ_STEP				(37) //same
 /* for multiple freq_step */
-#define DEF_FREQ_STEP_DEC			(13)
+#define DEF_FREQ_STEP_DEC			(13) //new
 
-#define DEF_START_DELAY				(0)
+#define DEF_START_DELAY				(0) //same
 
-#define UP_THRESHOLD_AT_MIN_FREQ		(40)
-#define FREQ_FOR_RESPONSIVENESS			(400000)
+/* this simply changes the threshold */
+#define UP_THRESHOLD_AT_MIN_FREQ		(40) //same
+#define FREQ_FOR_RESPONSIVENESS			(1100000) //was 500000 was 400000
 /* for fast decrease */
-#define UP_THRESHOLD_AT_FAST_DOWN		(95)
-#define FREQ_FOR_FAST_DOWN			(1200000)
+#define UP_THRESHOLD_AT_FAST_DOWN		(95) //new
+#define FREQ_FOR_FAST_DOWN			(1500000) //new
+
+/* BIKETRONIC_GOV */
+/* keep system cool under load */
+/* overclocking is for quick response only not sustained load */
+/* gives 1 second of OC per 30 seconds */
+/* must have 24 seconds at/below IDEAL_FREQ before resetting counter */
+/* so OC COOL TIME COUNTER will be zero and then  */
+/* set to a non zero number when oc time runs out */
+/* set as a ratio */
+/* for every cool time add one to OC time */
+/* minimum OC time before using it */
+
+#define IDEAL_FREQ				(1100000) //1100MHZ
+#define IDEAL_HIGH_FREQ				(1500000) //1500MHZ
+//#define MAX_FREQ				(1920000) //1920MHZ
+#define OC_COOL_TIME_RATIO			(10) // 1/30 = 3% max use -> 0.8% normally
+#define OC_COOL_TIME_MIN			(100) // *10ms = 1 sec to charge
+#define OC_COOL_TIME_MAX			(3000) // *10ms = 30 sec to charge
+
+/* PART 2 */
+/* super fast response */
+#define NORMAL_FREQ_STEP			(20) // 5% is minimum at 2000mhz. // not used - crash bug
+#define NORMAL_FREQ_STEP_KHZ			(120000) //khz NOT USED // crash bug
+
+#define IDLE_DOWN_THRESHOLD			(30)
+#define IDLE_UP_THRESHOLD			(40)
+
+#define IDLE_JUMP_IDEAL_UP_THRESHOLD		(90) //increase from 80
+#define IDLE_JUMP_HIGH_UP_THRESHOLD		(100) // disable, as it spends too much time at 1500
+
+#define IDEAL_DOWN_THRESHOLD			(10) // stay at 1100 unless cpu use drops off
+#define IDEAL_UP_THRESHOLD			(80)
+#define IDEAL_HIGH_DOWN_THRESHOLD		(70)
+
+#define IDEAL_JUMP_OC_UP_THRESHOLD		(95)
+
+#define OC_UP_THRESHOLD				(90)
+#define OC_DOWN_THRESHOLD			(85)
+
+
 
 #define HOTPLUG_DOWN_INDEX			(0)
 #define HOTPLUG_UP_INDEX			(1)
 
-#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
-#define FLEX_MAX_FREQ				(800000)
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE		
+#define FLEX_MAX_FREQ				(800000) //new
 #endif
 
 #ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
-#define LCD_FREQ_KICK_IN_DOWN_DELAY		(20)
-#define LCD_FREQ_KICK_IN_FREQ			(500000)
+#define LCD_FREQ_KICK_IN_DOWN_DELAY		(20) //new
+#define LCD_FREQ_KICK_IN_FREQ			(500000) //new
 
 extern int _lcdfreq_lock(int lock);
 #endif
 
+// MACH MIDAS IS SET TO Y!
 #ifdef CONFIG_MACH_MIDAS
-static int hotplug_rq[4][2] = {
-	{0, 175}, {175, 275}, {275, 375}, {375, 0}
+static int hotplug_rq[4][2] = { 
+	{0, 175}, {175, 275}, {275, 375}, {375, 0} //MACH MIDAS +75 
 };
 
 static int hotplug_freq[4][2] = {
 	{0, 500000},
 	{200000, 500000},
-	{200000, 700000},
-	{400000, 0}
+	{200000, 700000}, //was 2,5
+	{400000, 0} //was 2,0
 };
 #else
 static int hotplug_rq[4][2] = {
-	{0, 100}, {100, 200}, {200, 300}, {300, 0}
+	{0, 100}, {100, 200}, {200, 300}, {300, 0} // same
 };
 
-static int hotplug_freq[4][2] = {
+static int hotplug_freq[4][2] = { //same
 	{0, 500000},
 	{200000, 500000},
 	{200000, 500000},
@@ -278,6 +350,13 @@ static DEFINE_MUTEX(flex_mutex);
 #endif
 
 static struct dbs_tuners {
+	/* BIKETRONIC_GOV */
+	unsigned int oc_freq;
+	unsigned int cool_freq;
+	unsigned int max_gt_oc_time;
+	unsigned int max_oc_time;
+	unsigned int oc_cool_time;
+
 	unsigned int sampling_rate;
 	unsigned int up_threshold;
 	unsigned int up_threshold_diff;
@@ -319,6 +398,13 @@ static struct dbs_tuners {
 	unsigned int up_threshold_at_fast_down;
 	unsigned int freq_for_fast_down;
 } dbs_tuners_ins = {
+	/* BIKETRONIC_GOV */
+//	.oc_freq = OC_FREQ,
+//	.cool_freq = COOL_FREQ,
+//	.max_gt_oc_time = MAX_GT_OC_TIME,
+//	.max_oc_time = MAX_OC_TIME,
+//	.oc_cool_time = OC_COOL_TIME,
+
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
 	.up_threshold_diff = DEF_UP_THRESHOLD_DIFF,
 	.sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
@@ -469,7 +555,15 @@ struct cpu_usage {
 struct cpu_usage_history {
 	struct cpu_usage usage[MAX_HOTPLUG_RATE];
 	unsigned int num_hist;
+	unsigned int oc_cool_time; // ADD HERE?
 };
+
+/* BIKETRONIC_GOV */
+/*struct cpu_oc_history {
+	unsigned int time_remaining_gt_oc_speed;
+	unsigned int time_remaining_at_oc_speed;
+	unsigned int time_remaining_cooling_speed;
+};*/
 
 struct cpu_usage_history *hotplug_historyplus;
 
@@ -1263,6 +1357,7 @@ static void debug_hotplug_check(int which, int rq_avg, int freq,
 	printk(KERN_ERR "]\n");
 }
 
+/* BIKETRONIC_GOV NOTE: check_up and check_down used for hot plugging */
 static int check_up(void)
 {
 	int num_hist = hotplug_historyplus->num_hist;
@@ -1314,9 +1409,9 @@ static int check_up(void)
 			debug_hotplug_check(1, rq_avg, freq, usage);
 	}
 
-	if (min_freq >= up_freq && min_rq_avg > up_rq) {
-		if (online >= dbs_tuners_ins.cpu_online_bias_count) {
-			if (min_avg_load < dbs_tuners_ins.cpu_online_bias_up_threshold)
+	if (min_freq >= up_freq && min_rq_avg > up_rq) { // freq > up_freq (=UP) and rq > up_rq (=UP)
+		if (online >= dbs_tuners_ins.cpu_online_bias_count) { // num cpus online >= minimum (bias) (if less CPUs than bias online, don't check the following)
+			if (min_avg_load < dbs_tuners_ins.cpu_online_bias_up_threshold) // min load < bias up threshold (=NOT UP)
 				return 0;
 		}
 		printk(KERN_ERR "[HOTPLUG IN] %s %d>=%d && %d>%d\n",
@@ -1378,9 +1473,9 @@ static int check_down(void)
 			debug_hotplug_check(0, rq_avg, freq, usage);
 	}
 
-	if ((max_freq <= down_freq && max_rq_avg <= down_rq)
-		|| (online >= (dbs_tuners_ins.cpu_online_bias_count + 1) 
-		    && max_avg_load < dbs_tuners_ins.cpu_online_bias_down_threshold)) {
+	if ((max_freq <= down_freq && max_rq_avg <= down_rq) // freq < down & rq < down OR?
+		|| (online >= (dbs_tuners_ins.cpu_online_bias_count + 1) //(more than #bias cpus online AND
+		    && max_avg_load < dbs_tuners_ins.cpu_online_bias_down_threshold)) { // load < bias_down)
 		printk(KERN_ERR "[HOTPLUG OUT] %s %d<=%d && %d<%d\n",
 			__func__, max_freq, down_freq, max_rq_avg, down_rq);
 		hotplug_historyplus->num_hist = 0;
@@ -1390,6 +1485,9 @@ static int check_down(void)
 	return 0;
 }
 
+/*BIKETRONIC_GOV note*/
+/* main cpu freq logic here */
+/* all mods here */
 static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 {
 	unsigned int max_load_freq;
@@ -1404,6 +1502,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	/* add total_load, avg_load to get average load */
 	unsigned int total_load = 0;
 	unsigned int avg_load = 0;
+	unsigned int max_load = 0;
 	int load_each[4] = {-1, -1, -1, -1};
 
 	policy = this_dbs_info->cur_policy;
@@ -1435,6 +1534,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 
 	/* Get Absolute Load - in terms of freq */
 	max_load_freq = 0;
+	max_load = 0;
 
 	for_each_cpu(j, policy->cpus) {
 		struct cpu_dbs_info_s *j_dbs_info;
@@ -1445,7 +1545,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		int freq_avg;
 
 		j_dbs_info = &per_cpu(od_cpu_dbs_info, j);
-		prev_wall_time = j_dbs_info->prev_cpu_wall;
+		prev_wall_time = j_dbs_info->prev_cpu_wall; 
 		prev_idle_time = j_dbs_info->prev_cpu_idle;
 
 		cur_idle_time = get_cpu_idle_time(j, &cur_wall_time);
@@ -1478,11 +1578,12 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		if (unlikely(!wall_time || wall_time < idle_time))
 			continue;
 
-		load = 100 * (wall_time - idle_time) / wall_time;
+		load = 100 * (wall_time - idle_time) / wall_time; // 0-100 not idle
 
 		/* keep load of each CPUs and combined load across all CPUs */
 		if (cpu_online(j))
 			load_each[j] = load;
+
 		total_load += load;
 
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
@@ -1497,15 +1598,18 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 
 		freq_avg = __cpufreq_driver_getavg(policy, j);
 		if (freq_avg <= 0)
-			freq_avg = policy->cur;
+			freq_avg = policy->cur; //  freq_avg = freq * 1
 
-		load_freq = load * freq_avg;
+		load_freq = load * freq_avg; // = 100 * freq_avg
 		if (load_freq > max_load_freq)
 			max_load_freq = load_freq;
 	}
 
 	/* calculate the average load across all related CPUs */
 	avg_load = total_load / num_online_cpus();
+
+	// ADDED
+	max_load = max_load_freq / policy->cur; //added
 	
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 	if(hp_s_delay > 0 && hp_s_delay != hp_s_delayc)
@@ -1533,21 +1637,94 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
 	}
 #endif
+
+/*
+	check for overclocking for too long wasting battery
+	if frequency > OC frequency, subtract from timer
+	if frequency <= cool frequency, add to timer
+	if frequency > OC frequency && timer <=0 then reduce speed
+*/
+	//use oc history
+	// simple count of times this function is called...
+	// OC COOL TIME COUNTER:
+	if (policy->cur <= IDEAL_FREQ){
+		hotplug_historyplus->oc_cool_time++;
+		if (hotplug_historyplus->oc_cool_time > OC_COOL_TIME_MAX){
+			hotplug_historyplus->oc_cool_time = OC_COOL_TIME_MAX;
+		}
+	} else if (policy->cur > IDEAL_HIGH_FREQ){ //overclocked
+		if (hotplug_historyplus->oc_cool_time < OC_COOL_TIME_RATIO){
+			hotplug_historyplus->oc_cool_time=0;
+		} else {
+//*			if (IDEAL_HIGH_FREQ >= policy->max){//avoid divide by zero
+//*				hotplug_historyplus->oc_cool_time=0;
+//*			} else {
+			hotplug_historyplus->oc_cool_time=hotplug_historyplus->oc_cool_time - 
+				OC_COOL_TIME_RATIO;
+//*				((policy->cur - IDEAL_HIGH_FREQ)* OC_COOL_TIME_RATIO
+//*				/ (policy->max - IDEAL_HIGH_FREQ)); // eg (1600-1500)/(2000-1500) * 24
+//*			}
+		}
+	}
+
+	// BIKETRONIC set thresholds for normal operation
+	int down_threshold = 0;
+	if (policy->cur < IDEAL_FREQ){ // IDLE-IDEAL
+		up_threshold = IDLE_UP_THRESHOLD;
+		down_threshold = IDLE_DOWN_THRESHOLD;
+	} else if (policy->cur == IDEAL_FREQ){ // IDEAL
+		up_threshold = IDEAL_UP_THRESHOLD;
+		down_threshold = IDEAL_DOWN_THRESHOLD;
+	} else if (policy->cur < IDEAL_HIGH_FREQ){ // IDEAL-HIGH
+		up_threshold = IDEAL_UP_THRESHOLD;
+		down_threshold = IDEAL_HIGH_DOWN_THRESHOLD;
+	} else if (policy->cur = IDEAL_HIGH_FREQ){ // HIGH
+		up_threshold = OC_UP_THRESHOLD;
+		down_threshold = IDEAL_HIGH_DOWN_THRESHOLD;
+	} else if (policy->cur > IDEAL_HIGH_FREQ){ // HIGH-OC
+		up_threshold = OC_UP_THRESHOLD;
+		down_threshold = OC_DOWN_THRESHOLD;
+	}
+
+	// BIKETRONIC set boost operation
+//	boost_freq=0;
+//	threshold = load or avg_load (over all CPUs)
+/****	unsigned int boost_freq=0;
+	if (policy->cur < IDEAL_FREQ){
+		if (max_load > IDLE_JUMP_IDEAL_UP_THRESHOLD){
+			boost_freq = IDEAL_FREQ;
+		} else if (max_load > IDLE_JUMP_HIGH_UP_THRESHOLD){
+			boost_freq = IDEAL_HIGH_FREQ;
+		}
+	} else if (max_load > IDEAL_JUMP_OC_UP_THRESHOLD){ // >=IDEAL FREQ
+		boost_freq = policy->max;
+	}
+*/
+
 	/* Check for frequency increase */
-	if (policy->cur < dbs_tuners_ins.freq_for_responsiveness)
+	/* old removed */
+/*	if (policy->cur < dbs_tuners_ins.freq_for_responsiveness)
 		up_threshold = dbs_tuners_ins.up_threshold_at_min_freq;
 	else
 		up_threshold = dbs_tuners_ins.up_threshold;
-
-	if (max_load_freq > up_threshold * policy->cur) {
-		int target, inc;
+*/
+	/* UP uses target */
+	// NB max_load_freq = freq * 100
+	if (max_load > up_threshold) {  // removed multiplier _freq *policy->cur
+		unsigned int target, inc; //Changed to unsigned int
 		target = 0; inc = 0;
 
 		/* for multiple freq_step */
-		inc = policy->max * (dbs_tuners_ins.freq_step
-				     - dbs_tuners_ins.freq_step_dec * 2) / 100;
+		/* use of this causes crashes and limits frequency to 1704 (120mhz or 1800 250mhz)
+		//inc = (policy->max * NORMAL_FREQ_STEP) / 100; // FIX BUG /100
+		//inc = NORMAL_FREQ_STEP_KHZ;
 
-		/* for multiple freq_step */
+		/*remove complex freq step logic*/
+		/* removal limits frequency to 1704Mhz and causes crashes */
+		inc=policy->max *(dbs_tuners_ins.freq_step
+				     - dbs_tuners_ins.freq_step_dec * 2) / 100; // e.g. max=1920 * (30 - 16*2) /100???
+
+		// for multiple freq_step
 		if (max_load_freq > (up_threshold + dbs_tuners_ins.up_threshold_diff * 2)
 			* policy->cur)
 			inc = policy->max * dbs_tuners_ins.freq_step / 100;
@@ -1555,14 +1732,30 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 			* policy->cur)
 			inc = policy->max * (dbs_tuners_ins.freq_step
 					- dbs_tuners_ins.freq_step_dec) / 100;
-
+		
 		target = min(policy->max, policy->cur + inc);
+		
+		// BIKETRONIC BOOST
+/*****		if (boost_freq > 0 ){
+			boost_freq = min(policy->max, boost_freq); //sanity check
+			target = boost_freq;
+		}
+*/
+		// BIKETRONIC OC time limit
+		if (hotplug_historyplus->oc_cool_time < OC_COOL_TIME_MIN){
+			target = min(target, IDEAL_HIGH_FREQ); //max IDEAL_HIGH_FREQ
+		}
 
 		/* If switching to max speed, apply sampling_down_factor */
 		if (policy->cur < policy->max && target == policy->max)
 			this_dbs_info->rate_mult =
 				dbs_tuners_ins.sampling_down_factor;
+
+		target = min(policy->max, target); // try to fix crash on 1920?
+		target = max(policy->min, target);
+
 		dbs_freq_increase(policy, target);
+
 #ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
 		if(dbs_tuners_ins.lcdfreq_enable) {
 			if(target > dbs_tuners_ins.lcdfreq_kick_in_freq) {
@@ -1592,16 +1785,16 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		 * Recalculate max_load_freq based on the averaged histoic of 
 		 * the previous normalized samples instead of the current sample.
 		 */
-		max_load_freq = policy->min;
+		max_load_freq = policy->min; // not *100?
 
 		for_each_cpu(j, policy->cpus) {
 			unsigned int load_freq;
 
 			load_freq = hotplug_historyplus->usage[num_hist].load[j] * 
-				    hotplug_historyplus->usage[num_hist].freq;
+				    hotplug_historyplus->usage[num_hist].freq; // is *100
 
 			if (load_freq > max_load_freq)
-				max_load_freq = load_freq;
+				max_load_freq = load_freq; // is *100
 		}
 	}
 #endif
@@ -1612,21 +1805,47 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	 * policy. To be safe, we focus DOWN_DIFFERENTIAL points under
 	 * the threshold.
 	 */
-
+/*
 	if (policy->cur > dbs_tuners_ins.freq_for_fast_down)
 		up_threshold = dbs_tuners_ins.up_threshold_at_fast_down;
 	else
 		up_threshold = dbs_tuners_ins.up_threshold;
+*/
 
+	/* DOWN uses freq_next */
+ 	//down_threshold = up_threshold - dbs_tuners_ins.down_differential;
+
+	// BIKETRONIC OC time limit
+//****	if ((hotplug_historyplus->oc_cool_time <= OC_COOL_TIME_RATIO) && (policy->cur > IDEAL_HIGH_FREQ)){
+//		freq_next = IDEAL_HIGH_FREQ;
+//	}
+
+	// other down
+	// NB max_load_freq = max_freq * 100
 	if (max_load_freq <
-	    (up_threshold - dbs_tuners_ins.down_differential) *
-	    policy->cur) {
-		unsigned int freq_next;
-		unsigned int down_thres;
-
+	    (down_threshold) * policy->cur) {
+		unsigned int freq_next = 0;
+		//unsigned int down_thres;
+		
+		// maxloadfreq = load * freq_avg (*100)
+		// so it's the MHZ at 100% load *100
+		// freq_next is the MHZ at down threshold
+		// if down_threshold is really low this will be really high
+		// e.g. 200MHZ*100 / 20 = 1000Mhz
+		// so freq_next is freq* 1 
 		freq_next = max_load_freq /
-			(up_threshold -
-			 dbs_tuners_ins.down_differential);
+			(down_threshold); // e.g. 800mhz / 0.40??
+
+		// prevent OC and jump below ideal
+		if ((hotplug_historyplus->oc_cool_time <= OC_COOL_TIME_RATIO) && (policy->cur > IDEAL_HIGH_FREQ)){
+			freq_next = IDEAL_HIGH_FREQ;
+				// min(IDEAL_HIGH_FREQ, freq_next);
+		}
+		
+		if (policy->cur > IDEAL_FREQ && freq_next < IDEAL_FREQ){
+			freq_next = IDEAL_FREQ;
+		}
+
 
 		/* No longer fully busy, reset rate_mult */
 		this_dbs_info->rate_mult = 1;
@@ -1635,12 +1854,18 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 			freq_next = policy->min;
 
 
-		down_thres = dbs_tuners_ins.up_threshold_at_min_freq
+		/*down_thres = dbs_tuners_ins.up_threshold_at_min_freq
 			- dbs_tuners_ins.down_differential;
 
 		if (freq_next < dbs_tuners_ins.freq_for_responsiveness
 			&& (max_load_freq / freq_next) > down_thres)
 			freq_next = dbs_tuners_ins.freq_for_responsiveness;
+		*/
+
+//	}
+
+
+//	if (freq_next > 0 ){
 #ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
 		if(dbs_tuners_ins.lcdfreq_enable) {
 			if(dbs_tuners_ins.lcdfreq_kick_in_freq < freq_next) {
@@ -1657,11 +1882,17 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		if (policy->cur == freq_next)
 			return;
 
+		freq_next = min(policy->max, freq_next); //bug fix?
+		freq_next = max(policy->min, freq_next);
+
+		/* BIKETRONIC_GOV note: CPU speed set here: freq_next */
 		__cpufreq_driver_target(policy, freq_next,
 					CPUFREQ_RELATION_L);
 	}
 }
 
+/*BIKETRONIG_GOV note runs dbs_check_cpu*/
+/* which is the main logic area */
 static void do_dbs_timer(struct work_struct *work)
 {
 	struct cpu_dbs_info_s *dbs_info =
@@ -1671,7 +1902,7 @@ static void do_dbs_timer(struct work_struct *work)
 
 	mutex_lock(&dbs_info->timer_mutex);
 
-	dbs_check_cpu(dbs_info);
+	dbs_check_cpu(dbs_info); //BIKETRONIC_GOV note: MAIN LOGIC
 
 	delay = usecs_to_jiffies(dbs_tuners_ins.sampling_rate * dbs_info->rate_mult);
 	
@@ -1899,6 +2130,8 @@ static void cpufreq_pegasusqplus_late_resume(struct early_suspend *h)
 }
 #endif
 
+/* BIKETRONIC_GOV note */
+/* main loop ? start_rq_work?*/
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				unsigned int event)
 {
@@ -1917,6 +2150,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		dbs_tuners_ins.max_freq = policy->max;
 		dbs_tuners_ins.min_freq = policy->min;
 		hotplug_historyplus->num_hist = 0;
+		hotplug_historyplus->oc_cool_time = 0; //BIKETRONIC_GOV add here?
 		start_rq_work();
 
 		mutex_lock(&dbs_mutex);

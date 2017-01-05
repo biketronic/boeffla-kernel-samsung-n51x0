@@ -144,6 +144,10 @@ config CPU_FREQ_DEFAULT_GOV_PEGASUSQPLUS
 	bool "pegasusqplus"
 	select CPU_FREQ_GOV_PEGASUSQPLUS
 
+config CPU_FREQ_DEFAULT_GOV_PEGASUSQ_BIKETRONIC
+	bool "pegasusq_biketronic"
+	select CPU_FREQ_GOV_PEGASUSQ_BIKETRONIC
+
 config CPU_FREQ_DEFAULT_GOV_SMARTASS2
 	bool "smartass2"
 	select CPU_FREQ_GOV_SMARTASS2
@@ -322,6 +326,9 @@ config CPU_FREQ_GOV_PEGASUSQ
 config CPU_FREQ_GOV_PEGASUSQPLUS
 	tristate "'pegasusqplus' cpufreq policy governor"
 	
+config CPU_FREQ_GOV_PEGASUSQ_BIKETRONIC
+	tristate "'pegasusq_biketronic' cpufreq policy governor"
+
 config CPU_FREQ_GOV_SMARTASS2
 	tristate "'smartassV2' cpufreq governor"
 	depends on CPU_FREQ
