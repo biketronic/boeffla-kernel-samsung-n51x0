@@ -273,7 +273,7 @@ struct RegisterValue value[] = {
 	{F11_2D_CTRL07, 0x03},	/*  2D Max X Position (11:8)  */
 	{F11_2D_CTRL08, 0xFF},	/*  2D Max Y Position (7:0)  */
 	{F11_2D_CTRL09, 0x04},	/*  2D Max Y Position (11:8)  */
-	{F11_2D_CTRL29, 0x1E},	/*  Z Touch Threshold  */
+	{F11_2D_CTRL29, 0x0A},	/*  Z Touch Threshold  - reduce from 1E to 0A for extra glass + matt protector */
 	{F11_2D_CTRL30, 0x05},	/*  Z Touch Hysteresis        */
 	{F11_2D_CTRL31, 0x2D},	/*  Small Z Threshold  */
 	{F11_2D_CTRL32_00, 0x64},	/*  Small Z Scale Factor  */
